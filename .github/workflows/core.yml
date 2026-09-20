@@ -46,12 +46,14 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
+      - &setup-jdk
+        name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
+      - &cache-maven
+        name: Cache Maven dependencies
         uses: actions/cache@v5
         with:
           path: |
@@ -68,7 +70,8 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-npm-v1-${{ hashFiles('zeppelin-web/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-npm-v1-
-      - name: Cache locked Conda packages
+      - &cache-conda-python-39
+        name: Cache locked Conda packages
         uses: actions/cache@v5
         with:
           path: ~/conda_pkgs_dir
@@ -79,7 +82,8 @@ jobs:
         run: ./mvnw install -Pbuild-distr -DskipTests -pl zeppelin-server,zeppelin-web,spark-submit,spark/scala-2.12,spark/scala-2.13,markdown,angular,shell -am -Pweb-classic -Phelium-dev -Pexamples ${MAVEN_ARGS}
       - name: install and test plugins
         run: ./mvnw package -pl zeppelin-plugins -amd ${MAVEN_ARGS}
-      - name: Setup conda environment with python 3.9
+      - &setup-conda-python-39
+        name: Setup conda environment with python 3.9
         uses: conda-incubator/setup-miniconda@v4
         with:
           activate-environment: python_3
@@ -109,21 +113,8 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
+      - *setup-jdk
+      - *cache-maven
       - name: Cache locked TensorFlow Conda packages
         uses: actions/cache@v5
         with:
@@ -159,29 +150,11 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
-      - name: Cache locked Conda packages
-        uses: actions/cache@v5
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-${{ hashFiles('testing/locks/python-3.9-linux-64.conda.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-
-      - name: Setup conda environment with python ${{ matrix.python }}
+      - *setup-jdk
+      - *cache-maven
+      - *cache-conda-python-39
+      - &setup-conda-matrix-python
+        name: Setup conda environment with python ${{ matrix.python }}
         uses: conda-incubator/setup-miniconda@v4
         with:
           activate-environment: python_3
@@ -212,41 +185,14 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
-      - name: Cache locked Conda packages
-        uses: actions/cache@v5
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-${{ hashFiles('testing/locks/python-3.9-linux-64.conda.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-
+      - *setup-jdk
+      - *cache-maven
+      - *cache-conda-python-39
       - name: install environment
         run: |
           ./mvnw install -DskipTests -Pintegration -pl zeppelin-interpreter-integration,zeppelin-web,spark-submit,spark/scala-2.12,spark/scala-2.13,markdown,flink-cmd,flink/flink-scala-2.12,jdbc,shell -am -Pweb-classic -Pflink-1.20 ${MAVEN_ARGS}
           ./mvnw package -pl zeppelin-plugins -amd -DskipTests ${MAVEN_ARGS}
-      - name: Setup conda environment with python 3.9
-        uses: conda-incubator/setup-miniconda@v4
-        with:
-          activate-environment: python_3
-          environment-file: testing/locks/python-3.9-linux-64.conda.lock
-          channels: conda-forge
-          conda-remove-defaults: true
-          auto-update-conda: false
-          auto-activate: false
+      - *setup-conda-python-39
       - name: run tests
         run: ./mvnw test -pl zeppelin-interpreter-integration -Pintegration -DfailIfNoTests=false -Dtest=ZeppelinClientIntegrationTest,ZeppelinClientWithAuthIntegrationTest,ZSessionIntegrationTest,ShellIntegrationTest,JdbcIntegrationTest
       - name: Print zeppelin logs
@@ -272,28 +218,9 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
-      - name: Cache locked Conda packages
-        uses: actions/cache@v5
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-${{ hashFiles('testing/locks/python-3.9-linux-64.conda.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-
+      - *setup-jdk
+      - *cache-maven
+      - *cache-conda-python-39
       - name: Cache locked PyFlink packages
         uses: actions/cache@v5
         with:
@@ -334,41 +261,14 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
-      - name: Cache locked Conda packages
-        uses: actions/cache@v5
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-${{ hashFiles('testing/locks/python-3.9-linux-64.conda.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-
+      - *setup-jdk
+      - *cache-maven
+      - *cache-conda-python-39
       - name: install environment
         run: |
           ./mvnw install -DskipTests -pl zeppelin-interpreter-integration,zeppelin-web,spark-submit,spark/scala-2.12,spark/scala-2.13,markdown -am -Pweb-classic -Pintegration ${MAVEN_ARGS}
           ./mvnw clean package -pl zeppelin-plugins -amd -DskipTests ${MAVEN_ARGS}
-      - name: Setup conda environment with python 3.9
-        uses: conda-incubator/setup-miniconda@v4
-        with:
-          activate-environment: python_3
-          environment-file: testing/locks/python-3.9-linux-64.conda.lock
-          channels: conda-forge
-          conda-remove-defaults: true
-          auto-update-conda: false
-          auto-activate: false
+      - *setup-conda-python-39
       - name: run tests
         run: ./mvnw test -pl zeppelin-interpreter-integration -Pintegration -Dtest=SparkSubmitIntegrationTest,ZeppelinSparkClusterTest32,SparkIntegrationTest32,ZeppelinSparkClusterTest33,SparkIntegrationTest33 -DfailIfNoTests=false ${MAVEN_ARGS}
 
@@ -385,39 +285,12 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
-      - name: Cache locked Conda packages
-        uses: actions/cache@v5
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-${{ hashFiles('testing/locks/python-3.9-linux-64.conda.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-
+      - *setup-jdk
+      - *cache-maven
+      - *cache-conda-python-39
       - name: install environment
         run: ./mvnw install -DskipTests -pl spark-submit,spark/scala-2.12,spark/scala-2.13 -am ${MAVEN_ARGS}
-      - name: Setup conda environment with python ${{ matrix.python }}
-        uses: conda-incubator/setup-miniconda@v4
-        with:
-          activate-environment: python_3
-          environment-file: testing/locks/python-3.9-linux-64.conda.lock
-          channels: conda-forge
-          conda-remove-defaults: true
-          auto-update-conda: false
-          auto-activate: false
+      - *setup-conda-matrix-python
       - name: run spark-3.3 tests with scala-2.12 and python-${{ matrix.python }}
         run: |
           rm -rf spark/interpreter/metastore_db
@@ -454,16 +327,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 11
-      - name: Cache Maven dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/apache/zeppelin/
-            ~/.m2/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-maven-v2-${{ hashFiles('**/pom.xml', '.mvn/**') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-maven-v2-
+      - *cache-maven
       # Only this job downloads a standalone Spark archive; spark-test uses Maven artifacts.
       - name: Cache Spark distributions
         uses: actions/cache@v5
@@ -472,27 +336,13 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-spark-dist-v1-${{ hashFiles('testing/downloadSpark.sh', 'pom.xml', 'spark/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-spark-dist-v1-
-      - name: Cache locked Conda packages
-        uses: actions/cache@v5
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-${{ hashFiles('testing/locks/python-3.9-linux-64.conda.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-conda-python-3.9-v1-
+      - *cache-conda-python-39
       - name: install environment
         run: |
           ./mvnw install -DskipTests -pl livy -am ${MAVEN_ARGS}
           ./testing/downloadSpark.sh "3.2.4" "3.2"
           ./testing/downloadLivy.sh "0.8.0-incubating" "2.12"
-      - name: Setup conda environment with python 3.9
-        uses: conda-incubator/setup-miniconda@v4
-        with:
-          activate-environment: python_3
-          environment-file: testing/locks/python-3.9-linux-64.conda.lock
-          channels: conda-forge
-          conda-remove-defaults: true
-          auto-update-conda: false
-          auto-activate: false
+      - *setup-conda-python-39
       - name: run tests
         run: |
           export SPARK_HOME=$PWD/spark-3.2.4-bin-hadoop3.2
@@ -510,11 +360,7 @@ jobs:
         uses: actions/checkout@v5
       - name: Tune Runner VM
         uses: ./.github/actions/tune-runner-vm
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: ${{ matrix.java }}
+      - *setup-jdk
       - name: Cache local Maven repository
         uses: actions/cache@v5
         with:
