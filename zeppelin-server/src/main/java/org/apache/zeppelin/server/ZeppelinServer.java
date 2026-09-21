@@ -137,6 +137,7 @@ public class ZeppelinServer implements AutoCloseable {
   private final ZeppelinConfiguration zConf;
   private final Optional<PrometheusMeterRegistry> promMetricRegistry;
   private final Server jettyWebServer;
+  private ServerConnector serverConnector;
   private final ServiceLocator sharedServiceLocator;
   private final ConfigStorage storage;
 
@@ -306,6 +307,17 @@ public class ZeppelinServer implements AutoCloseable {
     }
   }
 
+  /**
+   * Returns the actual HTTP port after Jetty has started. This also supports port 0, which lets
+   * test fixtures avoid a free-port check-then-bind race when several servers start concurrently.
+   */
+  public int getServerPort() {
+    if (serverConnector != null && serverConnector.getLocalPort() > 0) {
+      return serverConnector.getLocalPort();
+    }
+    return zConf.getServerPort();
+  }
+
   public static void main(String[] args) throws Exception {
     ZeppelinConfiguration zConf = ZeppelinConfiguration.load();
     zConf.printShortInfo();
@@ -427,6 +439,7 @@ public class ZeppelinServer implements AutoCloseable {
     connector.addBean(new JettyServername(zConf));
     connector.addBean(new JettyConnectionMetrics(Metrics.globalRegistry, Tags.empty()));
     server.addConnector(connector);
+    serverConnector = connector;
   }
 
   private void runNoteOnStart(ServiceLocator sharedServiceLocator) {

@@ -46,11 +46,13 @@ class LocalRecoveryStorageTest extends AbstractInterpreterTest {
   @Override
   @BeforeEach
   public void setUp() throws Exception {
-    System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_RECOVERY_STORAGE_CLASS.getVarName(),
-            LocalRecoveryStorage.class.getName());
     recoveryDir = Files.createTempDir();
-    System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_RECOVERY_DIR.getVarName(), recoveryDir.getAbsolutePath());
-    super.setUp();
+    super.setUpWithConfiguration(zConf -> {
+      zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_RECOVERY_STORAGE_CLASS.getVarName(),
+          LocalRecoveryStorage.class.getName());
+      zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_RECOVERY_DIR.getVarName(),
+          recoveryDir.getAbsolutePath());
+    });
 
     note1Id = notebook.createNote("/note_1", AuthenticationInfo.ANONYMOUS);
     note2Id = notebook.createNote("/note_2", AuthenticationInfo.ANONYMOUS);
@@ -62,7 +64,6 @@ class LocalRecoveryStorageTest extends AbstractInterpreterTest {
   public void tearDown() throws Exception {
     super.tearDown();
     FileUtils.deleteDirectory(recoveryDir);
-    System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_RECOVERY_STORAGE_CLASS.getVarName());
   }
 
   @Test

@@ -83,7 +83,6 @@ class NotebookRepoSyncTest {
 
   @BeforeEach
   public void setUp() throws Exception {
-    System.setProperty("zeppelin.isTest", "true");
     zeppelinHome = Files.createTempDirectory(this.getClass().getSimpleName()).toFile();
     File confDir = new File(zeppelinHome, "conf");
     confDir.mkdirs();
@@ -95,17 +94,19 @@ class NotebookRepoSyncTest {
     secNotebookDir.mkdirs();
     zConf = ZeppelinConfiguration.load();
     noteParser = new GsonNoteParser(zConf);
-    storage = ConfigStorage.createConfigStorage(zConf);
     zConf.setProperty(ConfVars.ZEPPELIN_HOME.getVarName(), zeppelinHome.getAbsolutePath());
     zConf.setProperty(ConfVars.ZEPPELIN_NOTEBOOK_DIR.getVarName(), mainNotebookDir.getAbsolutePath());
     zConf.setProperty(ConfVars.ZEPPELIN_NOTEBOOK_STORAGE.getVarName(), "org.apache.zeppelin.notebook.repo.VFSNotebookRepo,org.apache.zeppelin.notebook.repo.mock.VFSNotebookRepoMock");
     zConf.setProperty(ConfVars.ZEPPELIN_NOTEBOOK_ONE_WAY_SYNC.getVarName(), "false");
     zConf.setProperty(ConfVars.ZEPPELIN_CONFIG_FS_DIR.getVarName(), zeppelinHome.getAbsolutePath() + "/conf");
+    zConf.setProperty(ConfVars.ZEPPELIN_INTERPRETER_LOCALREPO.getVarName(),
+        new File(zeppelinHome, "local-repo").getAbsolutePath());
+    storage = ConfigStorage.createConfigStorage(zConf);
     zConf.setProperty(ConfVars.ZEPPELIN_PLUGINS_DIR.getVarName(), new File("../../../plugins").getAbsolutePath());
 
     LOGGER.info("main Note dir : " + mainNotePath);
     LOGGER.info("secondary note dir : " + secNotePath);
-    pluginManager = new PluginManager(zConf);
+    pluginManager = new PluginManager(zConf, true);
     interpreterSettingManager = new InterpreterSettingManager(zConf,
         mock(AngularObjectRegistryListener.class), mock(RemoteInterpreterProcessListener.class),
         mock(ApplicationEventListener.class), storage, pluginManager);
@@ -123,7 +124,6 @@ class NotebookRepoSyncTest {
   @AfterEach
   public void tearDown() throws Exception {
     FileUtils.deleteDirectory(zeppelinHome);
-    System.clearProperty("zeppelin.isTest");
   }
 
   @Test

@@ -20,6 +20,7 @@ package org.apache.zeppelin.scheduler;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.apache.zeppelin.scheduler.Job.Status;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,12 @@ public class ParallelSchedulerTest {
 
   @BeforeAll
   public static void setUp() {
-    schedulerSvc = SchedulerFactory.singleton();
+    schedulerSvc = new SchedulerFactory("ParallelSchedulerTest");
+  }
+
+  @AfterAll
+  public static void tearDown() {
+    schedulerSvc.destroy();
   }
 
   @Test

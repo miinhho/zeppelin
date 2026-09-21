@@ -611,11 +611,7 @@ class NotebookServiceTest {
         new HashMap<>(), new HashMap<>(), context, callback);
     assertEquals("my_title", p.getTitle());
     assertEquals(serviceSearchToken, p.getText());
-    while (!searchService.isEventQueueEmpty()) {
-      Thread.sleep(10);
-    }
-    // The queue may be empty while its worker is finishing the current event.
-    Thread.sleep(100);
+    assertTrue(searchService.awaitEventQueueEmpty(10, TimeUnit.SECONDS));
     List<Map<String, String>> searchResults = searchService.query(serviceSearchToken, id -> true);
     assertTrue(searchResults.stream().anyMatch(result ->
         result.get("id").startsWith(note1Id)));

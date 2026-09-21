@@ -34,6 +34,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.zeppelin.conf.ZeppelinConfiguration;
@@ -88,10 +89,7 @@ class LuceneSearchTest {
   }
 
   private void drainSearchEvents() throws InterruptedException {
-    while (!noteSearchService.isEventQueueEmpty()) {
-      Thread.sleep(1000);
-    }
-    Thread.sleep(1000);
+    assertTrue(noteSearchService.awaitEventQueueEmpty(10, TimeUnit.SECONDS));
   }
 
   @Test
@@ -283,7 +281,7 @@ class LuceneSearchTest {
         return null;
       });
     drainSearchEvents();
-    Thread.sleep(1000);
+    assertTrue(noteSearchService.awaitEventQueueEmpty(10, TimeUnit.SECONDS));
     // then
     assertTrue(resultForQuery("Notebook1").isEmpty());
     assertFalse(resultForQuery("NotebookN").isEmpty());

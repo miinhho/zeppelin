@@ -121,8 +121,6 @@ class NotebookTest extends AbstractInterpreterTest implements ParagraphJobListen
   @AfterEach
   public void tearDown() throws Exception {
     super.tearDown();
-    System.clearProperty(ConfVars.ZEPPELIN_NOTEBOOK_PUBLIC.getVarName());
-    System.clearProperty(ConfVars.ZEPPELIN_NOTEBOOK_CRON_ENABLE.getVarName());
   }
 
   @Test

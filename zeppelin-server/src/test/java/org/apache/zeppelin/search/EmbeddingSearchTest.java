@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.zeppelin.conf.ZeppelinConfiguration;
@@ -117,10 +118,7 @@ class EmbeddingSearchTest {
   }
 
   private void drainSearchEvents() throws InterruptedException {
-    while (!searchService.isEventQueueEmpty()) {
-      Thread.sleep(500);
-    }
-    Thread.sleep(500);
+    assertTrue(searchService.awaitEventQueueEmpty(10, TimeUnit.SECONDS));
   }
 
   @Test

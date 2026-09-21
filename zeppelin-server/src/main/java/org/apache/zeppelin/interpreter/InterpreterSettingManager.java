@@ -130,6 +130,7 @@ public class InterpreterSettingManager implements NoteEventListener {
   private final Map<String, InterpreterSetting> interpreterSettings = Metrics.gaugeMapSize("interpreter.amount", Tags.empty(),
     new ConcurrentHashMap<>());
   private final Map<String, List<Meter>> interpreterSettingsMeters = new ConcurrentHashMap<>();
+  private Meter totalInterpreterGroupsMeter;
 
   private final List<Repository> interpreterRepositories;
   private InterpreterOption defaultOption;
@@ -377,7 +378,7 @@ public class InterpreterSettingManager implements NoteEventListener {
   }
 
   private void initMetrics() {
-    Gauge
+    totalInterpreterGroupsMeter = Gauge
       .builder("interpreter.group.size.total", () -> getAllInterpreterGroup().size())
       .description("Size of all interpreter groups")
       .tags()
@@ -1158,6 +1159,10 @@ public class InterpreterSettingManager implements NoteEventListener {
         Thread.currentThread().interrupt();
         break;
       }
+    }
+    if (totalInterpreterGroupsMeter != null) {
+      Metrics.globalRegistry.remove(totalInterpreterGroupsMeter);
+      totalInterpreterGroupsMeter = null;
     }
   }
 

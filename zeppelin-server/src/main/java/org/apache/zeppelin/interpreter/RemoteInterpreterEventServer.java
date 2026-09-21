@@ -105,9 +105,7 @@ public class RemoteInterpreterEventServer implements RemoteInterpreterEventServi
     Thread startingThread = new Thread() {
       @Override
       public void run() {
-        try (TServerSocket tSocket = new TServerSocket(zConf.getZeppelinServerRpcPort().orElse(
-            RemoteInterpreterUtils.findAvailablePort(zConf.getZeppelinServerRPCPortRange())))
-        ) {
+        try (TServerSocket tSocket = new TServerSocket(getServerSocketPort())) {
           port = tSocket.getServerSocket().getLocalPort();
           host = RemoteInterpreterUtils.findAvailableHostAddress();
           LOGGER.info("InterpreterEventServer is starting at {}:{}", host, port);
@@ -143,6 +141,18 @@ public class RemoteInterpreterEventServer implements RemoteInterpreterEventServi
     runner = new AppendOutputRunner(listener);
     appendFuture = appendService.scheduleWithFixedDelay(
         runner, 0, AppendOutputRunner.BUFFER_TIME_MS, TimeUnit.MILLISECONDS);
+  }
+
+  private int getServerSocketPort() throws IOException {
+    if (zConf.getZeppelinServerRpcPort().isPresent()) {
+      return zConf.getZeppelinServerRpcPort().getAsInt();
+    }
+    // Binding directly to port 0 avoids the check-then-bind race caused by selecting a free port
+    // with ServerSocket and closing it before TServerSocket binds.
+    if (":".equals(zConf.getZeppelinServerRPCPortRange())) {
+      return 0;
+    }
+    return RemoteInterpreterUtils.findAvailablePort(zConf.getZeppelinServerRPCPortRange());
   }
 
   public void stop() {

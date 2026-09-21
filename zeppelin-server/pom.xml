@@ -673,5 +673,88 @@
         </zeppelin.daemon.package.base>
       </properties>
     </profile>
+
+    <!--
+      Explicit opt-in only. These tests use per-test temporary roots and do not launch interpreter
+      processes or bind server ports, so they are the first P1 group safe to run in parallel.
+      The normal Maven test execution remains serial. The test branch CI explicitly activates
+      parallel-stress for broader same-JVM isolation testing.
+    -->
+    <profile>
+      <id>parallel-p1</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <includes>
+                <include>**/LuceneSearchTest.java</include>
+                <include>**/VFSNotebookRepoTest.java</include>
+                <include>**/GitNotebookRepoTest.java</include>
+                <include>**/NotebookRepoSyncInitializationTest.java</include>
+              </includes>
+              <parallel>classes</parallel>
+              <threadCount>6</threadCount>
+              <perCoreThreadCount>false</perCoreThreadCount>
+              <forkCount>6</forkCount>
+              <reuseForks>false</reuseForks>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!--
+      Diagnostic experiment only. This deliberately runs every server test class concurrently
+      to expose tests that still depend on process-wide files, ports, configuration, or services.
+      Do not use this profile as the default CI execution until failures are classified and fixed.
+    -->
+    <profile>
+      <id>parallel-aggressive</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <parallel>classes</parallel>
+              <threadCount>8</threadCount>
+              <perCoreThreadCount>false</perCoreThreadCount>
+              <forkCount>8</forkCount>
+              <reuseForks>false</reuseForks>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!--
+      Same-JVM stress experiment. This intentionally removes fork isolation so that process-wide
+      system properties, metrics registries, schedulers, and caches are tested under contention.
+      Diagnostic only; do not use as the default test execution.
+    -->
+    <profile>
+      <id>parallel-stress</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <parallel>all</parallel>
+              <threadCount>8</threadCount>
+              <perCoreThreadCount>false</perCoreThreadCount>
+              <forkCount>1</forkCount>
+              <reuseForks>true</reuseForks>
+              <systemPropertyVariables>
+                <junit.jupiter.execution.parallel.enabled>true</junit.jupiter.execution.parallel.enabled>
+                <junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>
+                <junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>
+                <junit.jupiter.execution.parallel.config.strategy>fixed</junit.jupiter.execution.parallel.config.strategy>
+                <junit.jupiter.execution.parallel.config.fixed.parallelism>8</junit.jupiter.execution.parallel.config.fixed.parallelism>
+              </systemPropertyVariables>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

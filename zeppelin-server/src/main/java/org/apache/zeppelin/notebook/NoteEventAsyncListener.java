@@ -39,6 +39,8 @@ public abstract class NoteEventAsyncListener implements NoteEventListener, Close
 
   private final ThreadPoolExecutor executor;
   private final String name;
+  private final Object eventMonitor = new Object();
+  private int pendingEvents;
 
   protected NoteEventAsyncListener(String name) {
     this.name = name;
@@ -66,37 +68,52 @@ public abstract class NoteEventAsyncListener implements NoteEventListener, Close
 
   @Override
   public void onNoteCreate(Note note, AuthenticationInfo subject) {
-    executor.execute(new EventHandling(new NoteCreateEvent(note.getId())));
+    submitEvent(new NoteCreateEvent(note.getId()));
   }
 
   @Override
   public void onNoteRemove(Note note, AuthenticationInfo subject) {
-    executor.execute(new EventHandling(new NoteRemoveEvent(note.getId())));
+    submitEvent(new NoteRemoveEvent(note.getId()));
   }
 
   @Override
   public void onNoteUpdate(Note note, AuthenticationInfo subject) {
-    executor.execute(new EventHandling(new NoteUpdateEvent(note.getId())));
+    submitEvent(new NoteUpdateEvent(note.getId()));
   }
 
   @Override
   public void onParagraphCreate(Paragraph p) {
-    executor.execute(new EventHandling(new ParagraphCreateEvent(p.getNote().getId(), p.getId())));
+    submitEvent(new ParagraphCreateEvent(p.getNote().getId(), p.getId()));
   }
 
   @Override
   public void onParagraphRemove(Paragraph p) {
-    executor.execute(new EventHandling(new ParagraphRemoveEvent(p.getNote().getId(), p.getId())));
+    submitEvent(new ParagraphRemoveEvent(p.getNote().getId(), p.getId()));
   }
 
   @Override
   public void onParagraphUpdate(Paragraph p) {
-    executor.execute(new EventHandling(new ParagraphUpdateEvent(p.getNote().getId(), p.getId())));
+    submitEvent(new ParagraphUpdateEvent(p.getNote().getId(), p.getId()));
   }
 
   @Override
   public void onParagraphStatusChange(Paragraph p, Job.Status status) {
-    executor.execute(new EventHandling(new ParagraphStatusChangeEvent(p.getNote().getId(), p.getId())));
+    submitEvent(new ParagraphStatusChangeEvent(p.getNote().getId(), p.getId()));
+  }
+
+  private void submitEvent(NoteEvent event) {
+    synchronized (eventMonitor) {
+      pendingEvents++;
+    }
+    try {
+      executor.execute(new EventHandling(event));
+    } catch (RuntimeException e) {
+      synchronized (eventMonitor) {
+        pendingEvents--;
+        eventMonitor.notifyAll();
+      }
+      throw e;
+    }
   }
 
   class EventHandling implements Runnable {
@@ -126,12 +143,37 @@ public abstract class NoteEventAsyncListener implements NoteEventListener, Close
         }
       } catch (Exception e) {
         LOGGER.error("Fail to handle NoteEvent", e);
+      } finally {
+        synchronized (eventMonitor) {
+          pendingEvents--;
+          if (pendingEvents == 0) {
+            eventMonitor.notifyAll();
+          }
+        }
       }
     }
   }
 
   public boolean isEventQueueEmpty() {
     return executor.getQueue().isEmpty();
+  }
+
+  /**
+   * Waits until all events submitted before this call have finished handling.
+   *
+   * <p>This also accounts for the event currently running on the worker thread, unlike checking
+   * whether the executor queue is empty.
+   */
+  public boolean awaitEventQueueEmpty(long timeout, TimeUnit unit) throws InterruptedException {
+    long remainingNanos = unit.toNanos(timeout);
+    long deadline = System.nanoTime() + remainingNanos;
+    synchronized (eventMonitor) {
+      while (pendingEvents > 0 && remainingNanos > 0) {
+        TimeUnit.NANOSECONDS.timedWait(eventMonitor, remainingNanos);
+        remainingNanos = deadline - System.nanoTime();
+      }
+      return pendingEvents == 0;
+    }
   }
 
   interface NoteEvent {

@@ -40,6 +40,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.function.Consumer;
 
 import static org.mockito.Mockito.mock;
 
@@ -59,6 +62,7 @@ public abstract class AbstractInterpreterTest {
   protected NoteParser noteParser;
   protected Notebook notebook;
   protected File zeppelinHome;
+  protected File projectHome;
   protected File interpreterDir;
   protected File confDir;
   protected File notebookDir;
@@ -68,27 +72,48 @@ public abstract class AbstractInterpreterTest {
 
   @BeforeEach
   public void setUp() throws Exception {
+    setUpWithConfiguration(null);
+  }
+
+  protected void setUpWithConfiguration(Consumer<ZeppelinConfiguration> customizer)
+      throws Exception {
     // copy the resources files to a temp folder
-    zeppelinHome = new File("..");
+    projectHome = new File("..").getCanonicalFile();
+    zeppelinHome = Files.createTempDirectory(getClass().getSimpleName()).toFile();
     LOGGER.info("ZEPPELIN_HOME: " + zeppelinHome.getAbsolutePath());
-    interpreterDir = new File(zeppelinHome, "interpreter_" + getClass().getSimpleName());
-    confDir = new File(zeppelinHome, "conf_" + getClass().getSimpleName());
-    notebookDir = new File(zeppelinHome, "notebook_" + getClass().getSimpleName());
-    FileUtils.deleteDirectory(notebookDir);
+    interpreterDir = new File(zeppelinHome, "interpreter");
+    confDir = new File(zeppelinHome, "conf");
+    notebookDir = new File(zeppelinHome, "notebook");
 
     // Create test directories
     interpreterDir.mkdirs();
     confDir.mkdirs();
     notebookDir.mkdirs();
+    linkProjectDirectory("bin");
+    linkProjectTargetDirectory("zeppelin-server", "classes");
+    linkProjectTargetDirectory("zeppelin-server", "test-classes");
+    linkProjectDirectory("zeppelin-interpreter");
+    linkProjectDirectory("zeppelin-interpreter-shaded");
     // Clean-up the test directories on exit
     FileUtils.forceDeleteOnExit(interpreterDir);
     FileUtils.forceDeleteOnExit(confDir);
     FileUtils.forceDeleteOnExit(notebookDir);
+    FileUtils.forceDeleteOnExit(zeppelinHome);
 
     FileUtils.copyDirectory(new File("src/test/resources/interpreter"), interpreterDir);
     FileUtils.copyDirectory(new File("src/test/resources/conf"), confDir);
+    File shadedInterpreter = new File(projectHome, "interpreter");
+    for (File file : shadedInterpreter.listFiles()) {
+      if (file.getName().startsWith("zeppelin-interpreter-shaded-")
+          && file.getName().endsWith(".jar")) {
+        FileUtils.copyFile(file, new File(interpreterDir, file.getName()));
+      }
+    }
 
     zConf = ZeppelinConfiguration.load();
+    if (customizer != null) {
+      customizer.accept(zConf);
+    }
     zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_HOME.getVarName(),
         zeppelinHome.getAbsolutePath());
     zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_CONF_DIR.getVarName(),
@@ -135,6 +160,34 @@ public abstract class AbstractInterpreterTest {
       LOGGER.info("Delete notebookDir: {}", notebookDir);
       FileUtils.deleteDirectory(notebookDir);
     }
+    if (zeppelinHome != null) {
+      deleteProjectLinks();
+      LOGGER.info("Delete zeppelinHome: {}", zeppelinHome);
+      FileUtils.deleteDirectory(zeppelinHome);
+    }
+  }
+
+  private void linkProjectDirectory(String name) throws Exception {
+    Path link = zeppelinHome.toPath().resolve(name);
+    Files.createSymbolicLink(link, projectHome.toPath().resolve(name));
+  }
+
+  private void linkProjectTargetDirectory(String module, String directory) throws Exception {
+    Path moduleDirectory = zeppelinHome.toPath().resolve(module);
+    Path targetDirectory = moduleDirectory.resolve("target");
+    Files.createDirectories(targetDirectory);
+    Files.createSymbolicLink(targetDirectory.resolve(directory),
+        projectHome.toPath().resolve(module).resolve("target").resolve(directory));
+  }
+
+  private void deleteProjectLinks() throws Exception {
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("bin"));
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("zeppelin-server/target/classes"));
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("zeppelin-server/target/test-classes"));
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("zeppelin-server/target"));
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("zeppelin-server"));
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("zeppelin-interpreter"));
+    Files.deleteIfExists(zeppelinHome.toPath().resolve("zeppelin-interpreter-shaded"));
   }
 
   protected Note createNote() {

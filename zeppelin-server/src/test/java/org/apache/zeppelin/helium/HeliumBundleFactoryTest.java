@@ -26,31 +26,42 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.github.eirslett.maven.plugins.frontend.lib.InstallationException;
 import com.github.eirslett.maven.plugins.frontend.lib.TaskRunnerException;
 import com.google.common.io.Resources;
+import org.apache.commons.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.zeppelin.conf.ZeppelinConfiguration;
 import org.apache.zeppelin.conf.ZeppelinConfiguration.ConfVars;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class HeliumBundleFactoryTest {
   private HeliumBundleFactory hbf;
   private File nodeInstallationDir;
+  private File tmpDir;
 
   @BeforeEach
   public void setUp() throws InstallationException, TaskRunnerException, IOException {
     ZeppelinConfiguration zConf = ZeppelinConfiguration.load();
     zConf.setProperty(ConfVars.ZEPPELIN_HOME.getVarName(),
         new File("../").getAbsolutePath().toString());
+    tmpDir = Files.createTempDirectory("HeliumBundleFactoryTest").toFile();
+    zConf.setProperty(ConfVars.ZEPPELIN_DEP_LOCALREPO.getVarName(), tmpDir.getAbsolutePath());
     nodeInstallationDir =
         new File(zConf.getAbsoluteDir(ConfVars.ZEPPELIN_DEP_LOCALREPO), HELIUM_LOCAL_REPO);
 
     hbf = new HeliumBundleFactory(zConf);
     hbf.installNodeAndNpm();
     hbf.copyFrameworkModulesToInstallPath(true);
+  }
+
+  @AfterEach
+  void tearDown() throws IOException {
+    FileUtils.deleteDirectory(tmpDir);
   }
 
 

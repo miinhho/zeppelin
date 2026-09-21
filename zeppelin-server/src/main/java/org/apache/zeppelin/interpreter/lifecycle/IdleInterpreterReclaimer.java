@@ -115,7 +115,18 @@ public class IdleInterpreterReclaimer {
    */
   @VisibleForTesting
   void reclaimIdleInterpreterGroups() {
-    long now = System.currentTimeMillis();
+    reclaimIdleInterpreterGroups(System.currentTimeMillis());
+  }
+
+  /**
+   * Reclaims idle interpreter groups using the supplied current time.
+   *
+   * <p>The overload keeps the policy testable without making tests wait for a real idle timeout.
+   * Production scheduling always uses {@link System#currentTimeMillis()} through the no-argument
+   * method.
+   */
+  @VisibleForTesting
+  void reclaimIdleInterpreterGroups(long now) {
     for (ManagedInterpreterGroup interpreterGroup :
         interpreterSettingManager.getAllInterpreterGroup()) {
       try {

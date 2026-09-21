@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.zeppelin.scheduler.Job.Status;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,12 @@ class FIFOSchedulerTest {
 
   @BeforeAll
   static void setUp() {
-    schedulerSvc = SchedulerFactory.singleton();
+    schedulerSvc = new SchedulerFactory("FIFOSchedulerTest");
+  }
+
+  @AfterAll
+  static void tearDown() {
+    schedulerSvc.destroy();
   }
 
   @Test

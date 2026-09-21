@@ -24,13 +24,11 @@ import com.github.eirslett.maven.plugins.frontend.lib.NpmRunner;
 import com.github.eirslett.maven.plugins.frontend.lib.ProxyConfig;
 import com.github.eirslett.maven.plugins.frontend.lib.TaskRunnerException;
 import com.github.eirslett.maven.plugins.frontend.lib.YarnInstaller;
-import com.github.eirslett.maven.plugins.frontend.lib.YarnRunner;
 import com.google.common.io.Resources;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
@@ -43,7 +41,7 @@ import java.io.StringReader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -55,11 +53,6 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Appender;
-import org.apache.log4j.PatternLayout;
-import org.apache.log4j.WriterAppender;
-import org.apache.log4j.spi.Filter;
-import org.apache.log4j.spi.LoggingEvent;
 import org.apache.zeppelin.conf.ZeppelinConfiguration;
 import org.apache.zeppelin.conf.ZeppelinConfiguration.ConfVars;
 import org.slf4j.Logger;
@@ -87,7 +80,6 @@ public class HeliumBundleFactory {
   private static final int FETCH_RETRY_COUNT = 2;
   private static final int FETCH_RETRY_FACTOR_COUNT = 1;
   private static final int FETCH_RETRY_MIN_TIMEOUT = 5000; // Milliseconds
-
   private final FrontendPluginFactory frontEndPluginFactory;
   private final File nodeInstallationDirectory;
   private final File heliumLocalRepoDirectory;
@@ -102,8 +94,6 @@ public class HeliumBundleFactory {
   private String defaultYarnInstallerUrl;
   private Gson gson;
   private boolean nodeAndNpmInstalled = false;
-
-  private ByteArrayOutputStream out  = new ByteArrayOutputStream();
 
   @Inject
   public HeliumBundleFactory(ZeppelinConfiguration zConf) {
@@ -136,7 +126,7 @@ public class HeliumBundleFactory {
     }
   }
 
-  void installNodeAndNpm() throws TaskRunnerException {
+  void installNodeAndNpm() throws IOException {
     if (nodeAndNpmInstalled) {
       return;
     }
@@ -160,9 +150,8 @@ public class HeliumBundleFactory {
       yarnInstaller.install();
       yarnCacheDir.mkdirs();
       String yarnCacheDirPath = yarnCacheDir.getAbsolutePath();
-      yarnCommand(frontEndPluginFactory, "config set cache-folder " + yarnCacheDirPath);
-
-      configureLogger();
+      yarnCommand(heliumLocalRepoDirectory, "config set cache-folder " + yarnCacheDirPath,
+          isolatedEnvironment());
       nodeAndNpmInstalled = true;
     } catch (InstallationException e) {
       LOGGER.error(e.getMessage(), e);
@@ -374,33 +363,20 @@ public class HeliumBundleFactory {
             loadJsImport.append(loadJsRegister).toString(), StandardCharsets.UTF_8);
   }
 
-  private synchronized void installNodeModules(FrontendPluginFactory fpf) throws IOException {
-    try {
-      out.reset();
-      String commandForNpmInstall =
-              String.format("install --fetch-retries=%d --fetch-retry-factor=%d " +
-                              "--fetch-retry-mintimeout=%d",
-                      FETCH_RETRY_COUNT, FETCH_RETRY_FACTOR_COUNT, FETCH_RETRY_MIN_TIMEOUT);
-      LOGGER.info("Installing required node modules");
-      yarnCommand(fpf, commandForNpmInstall);
-      LOGGER.info("Installed required node modules");
-    } catch (TaskRunnerException e) {
-      throw new IOException(e);
-    }
+  private void installNodeModules(File bundleDir) throws IOException {
+    String commandForNpmInstall =
+            String.format("install --fetch-retries=%d --fetch-retry-factor=%d " +
+                            "--fetch-retry-mintimeout=%d",
+                    FETCH_RETRY_COUNT, FETCH_RETRY_FACTOR_COUNT, FETCH_RETRY_MIN_TIMEOUT);
+    LOGGER.info("Installing required node modules");
+    yarnCommand(bundleDir, commandForNpmInstall, isolatedEnvironment());
+    LOGGER.info("Installed required node modules");
   }
 
-  private synchronized File bundleHeliumPackage(FrontendPluginFactory fpf,
-                                               File bundleDir) throws IOException {
-    try {
-      out.reset();
-      LOGGER.info("Bundling helium packages");
-      yarnCommand(fpf, "run bundle");
-      LOGGER.info("Bundled helium packages");
-    } catch (TaskRunnerException e) {
-      throw new IOException(new String(out.toByteArray()));
-    }
-
-    String bundleStdoutResult = new String(out.toByteArray());
+  private File bundleHeliumPackage(File bundleDir) throws IOException {
+    LOGGER.info("Bundling helium packages");
+    String bundleStdoutResult = yarnCommand(bundleDir, "run bundle", isolatedEnvironment());
+    LOGGER.info("Bundled helium packages");
     File heliumBundle = new File(bundleDir, HELIUM_BUNDLE);
     if (!heliumBundle.isFile()) {
       throw new IOException(
@@ -416,9 +392,15 @@ public class HeliumBundleFactory {
     return heliumBundle;
   }
 
-  public synchronized File buildPackage(HeliumPackage pkg,
-                                        boolean rebuild,
-                                        boolean recopyLocalModule) throws IOException {
+  public File buildPackage(HeliumPackage pkg,
+                           boolean rebuild,
+                           boolean recopyLocalModule) throws IOException {
+    return buildPackageInternal(pkg, rebuild, recopyLocalModule);
+  }
+
+  private File buildPackageInternal(HeliumPackage pkg,
+                                    boolean rebuild,
+                                    boolean recopyLocalModule) throws IOException {
     if (pkg == null) {
       return null;
     }
@@ -438,11 +420,7 @@ public class HeliumBundleFactory {
     }
 
     // 0. install node, npm (should be called before `downloadPackage`
-    try {
-      installNodeAndNpm();
-    } catch (TaskRunnerException e) {
-      throw new IOException(e);
-    }
+    installNodeAndNpm();
 
     // 1. prepare directories
     if (!heliumLocalRepoDirectory.exists() || !heliumLocalRepoDirectory.isDirectory()) {
@@ -472,10 +450,10 @@ public class HeliumBundleFactory {
 
     // 4. install node and local modules for a bundle
     copyFrameworkModulesToInstallPath(recopyLocalModule); // should copy local modules first
-    installNodeModules(fpf);
+    installNodeModules(bundleDir);
 
     // 5. let's bundle and update cache
-    File heliumBundle = bundleHeliumPackage(fpf, bundleDir);
+    File heliumBundle = bundleHeliumPackage(bundleDir);
     bundleCache.delete();
     FileUtils.moveFile(heliumBundle, bundleCache);
 
@@ -673,54 +651,84 @@ public class HeliumBundleFactory {
   }
 
   private void npmCommand(String args) throws TaskRunnerException {
-    npmCommand(args, new HashMap<>());
+    npmCommand(args, isolatedEnvironment());
   }
 
   private void npmCommand(String args, Map<String, String> env) throws TaskRunnerException {
     NpmRunner npm = frontEndPluginFactory.getNpmRunner(
             getProxyConfig(isSecure(defaultNpmInstallerUrl)), defaultNpmInstallerUrl);
-    npm.execute(args, env);
+    npm.execute(args, isolatedEnvironment(env));
   }
 
   private void npmCommand(FrontendPluginFactory fpf, String args) throws TaskRunnerException {
     npmCommand(args, new HashMap<>());
   }
 
-  private void yarnCommand(FrontendPluginFactory fpf, String args) throws TaskRunnerException {
-    yarnCommand(fpf, args, new HashMap<>());
+  private String yarnCommand(File workingDirectory, String args, Map<String, String> env)
+      throws IOException {
+    File node = new File(nodeInstallationDirectory, "node/node");
+    File yarn = new File(nodeInstallationDirectory, "node/yarn/dist/bin/yarn.js");
+    List<String> command = new ArrayList<>();
+    command.add(node.getAbsolutePath());
+    command.add(yarn.getAbsolutePath());
+    command.addAll(parseCommand(args));
+    if (StringUtils.isNotBlank(defaultNpmInstallerUrl)) {
+      command.add("--registry=" + defaultNpmInstallerUrl);
+    }
+
+    ProcessBuilder processBuilder = new ProcessBuilder(command)
+        .directory(workingDirectory)
+        .redirectErrorStream(true);
+    processBuilder.environment().putAll(isolatedEnvironment(env));
+    Process process = processBuilder.start();
+    String output;
+    try {
+      output = IOUtils.toString(process.getInputStream(), StandardCharsets.UTF_8);
+      int exitCode = process.waitFor();
+      if (exitCode != 0) {
+        throw new IOException("Yarn command failed with exit code " + exitCode + ": " + output);
+      }
+    } catch (InterruptedException e) {
+      process.destroyForcibly();
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while running Yarn command", e);
+    }
+    return output;
   }
 
-  private void yarnCommand(FrontendPluginFactory fpf,
-                           String args, Map<String, String> env) throws TaskRunnerException {
-    YarnRunner yarn = fpf.getYarnRunner(
-            getProxyConfig(isSecure(defaultNpmInstallerUrl)), defaultNpmInstallerUrl);
-    yarn.execute(args, env);
+  private Map<String, String> isolatedEnvironment() {
+    return isolatedEnvironment(new HashMap<>());
   }
 
-  private synchronized void configureLogger() {
-    org.apache.log4j.Logger npmLogger = org.apache.log4j.Logger.getLogger(
-        "com.github.eirslett.maven.plugins.frontend.lib.DefaultYarnRunner");
-    Enumeration appenders = org.apache.log4j.Logger.getRootLogger().getAllAppenders();
+  private Map<String, String> isolatedEnvironment(Map<String, String> env) {
+    Map<String, String> isolatedEnv = new HashMap<>(env);
+    isolatedEnv.putIfAbsent("HOME", heliumLocalRepoDirectory.getAbsolutePath());
+    return isolatedEnv;
+  }
 
-    if (appenders != null) {
-      while (appenders.hasMoreElements()) {
-        Appender appender = (Appender) appenders.nextElement();
-        appender.addFilter(new Filter() {
-
-          @Override
-          public int decide(LoggingEvent loggingEvent) {
-            if (loggingEvent.getLoggerName().contains("DefaultYarnRunner")) {
-              return DENY;
-            } else {
-              return NEUTRAL;
-            }
-          }
-        });
+  private List<String> parseCommand(String command) {
+    if (StringUtils.isBlank(command)) {
+      return Collections.emptyList();
+    }
+    List<String> arguments = new ArrayList<>();
+    StringBuilder current = new StringBuilder();
+    boolean quoted = false;
+    for (int i = 0; i < command.length(); i++) {
+      char c = command.charAt(i);
+      if (c == '"') {
+        quoted = !quoted;
+      } else if (Character.isWhitespace(c) && !quoted) {
+        if (current.length() > 0) {
+          arguments.add(current.toString());
+          current.setLength(0);
+        }
+      } else {
+        current.append(c);
       }
     }
-    npmLogger.addAppender(new WriterAppender(
-        new PatternLayout("%m%n"),
-        out
-    ));
+    if (current.length() > 0) {
+      arguments.add(current.toString());
+    }
+    return arguments;
   }
 }

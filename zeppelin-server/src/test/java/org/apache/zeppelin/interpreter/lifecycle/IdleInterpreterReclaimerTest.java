@@ -80,7 +80,8 @@ class IdleInterpreterReclaimerTest extends AbstractInterpreterTest {
     startEchoInterpreter();
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
 
-    waitForInterpreterGroups(interpreterSetting, 0, 40);
+    interpreterSettingManager.getIdleInterpreterReclaimer()
+        .reclaimIdleInterpreterGroups(System.currentTimeMillis() + 15_000L);
     assertEquals(0, interpreterSetting.getAllInterpreterGroups().size(),
         "the group should be reclaimed after the per setting threshold of 10s");
   }
@@ -101,7 +102,8 @@ class IdleInterpreterReclaimerTest extends AbstractInterpreterTest {
     startEchoInterpreter();
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
 
-    Thread.sleep(20 * 1000);
+    interpreterSettingManager.getIdleInterpreterReclaimer()
+        .reclaimIdleInterpreterGroups(System.currentTimeMillis() + 20_000L);
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size(),
         "the setting opted out of reclaim, so the short global threshold must not apply");
   }
@@ -117,7 +119,8 @@ class IdleInterpreterReclaimerTest extends AbstractInterpreterTest {
     startEchoInterpreter();
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
 
-    waitForInterpreterGroups(interpreterSetting, 0, 40);
+    interpreterSettingManager.getIdleInterpreterReclaimer()
+        .reclaimIdleInterpreterGroups(System.currentTimeMillis() + 15_000L);
     assertEquals(0, interpreterSetting.getAllInterpreterGroups().size());
   }
 
@@ -325,13 +328,4 @@ class IdleInterpreterReclaimerTest extends AbstractInterpreterTest {
     assertTrue(echoInterpreter.isOpened());
   }
 
-  private void waitForInterpreterGroups(InterpreterSetting interpreterSetting,
-                                        int expectedSize,
-                                        int maxSeconds) throws Exception {
-    long deadline = System.currentTimeMillis() + maxSeconds * 1000L;
-    while (interpreterSetting.getAllInterpreterGroups().size() != expectedSize
-        && System.currentTimeMillis() < deadline) {
-      Thread.sleep(1000);
-    }
-  }
 }

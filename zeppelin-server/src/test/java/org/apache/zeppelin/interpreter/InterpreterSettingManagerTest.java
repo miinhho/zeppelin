@@ -349,52 +349,37 @@ class InterpreterSettingManagerTest extends AbstractInterpreterTest {
 
   @Test
   void testInterpreterInclude() throws Exception {
-    try {
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_INCLUDES.getVarName(), "mock1");
-      setUp();
-
-      assertEquals(1, interpreterSettingManager.get().size());
-      assertEquals("mock1", interpreterSettingManager.get().get(0).getGroup());
-    } finally {
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_INCLUDES.getVarName());
-    }
+    reinitializeInterpreterSettingManager("mock1", "");
+    assertEquals(1, interpreterSettingManager.get().size());
+    assertEquals("mock1", interpreterSettingManager.get().get(0).getGroup());
   }
 
   @Test
   void testInterpreterExclude() throws Exception {
-    try {
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_EXCLUDES.getVarName(),
-              "test,config_test,mock_resource_pool");
-      setUp();
-
-      assertEquals(2, interpreterSettingManager.get().size());
-      assertNotNull(interpreterSettingManager.getByName("mock1"));
-      assertNotNull(interpreterSettingManager.getByName("mock2"));
-    } finally {
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_EXCLUDES.getVarName());
-    }
+    reinitializeInterpreterSettingManager("", "test,config_test,mock_resource_pool");
+    assertEquals(2, interpreterSettingManager.get().size());
+    assertNotNull(interpreterSettingManager.getByName("mock1"));
+    assertNotNull(interpreterSettingManager.getByName("mock2"));
   }
 
   @Test
   void testInterpreterIncludeExcludeTogether() throws Exception {
     try {
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_INCLUDES.getVarName(),
-              "test,");
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_EXCLUDES.getVarName(),
-              "config_test,mock_resource_pool");
-
-      try {
-        setUp();
-        fail("Should not able to create InterpreterSettingManager");
-      } catch (Exception e) {
-        e.printStackTrace();
-        assertEquals("zeppelin.interpreter.include and zeppelin.interpreter.exclude can not be specified together, only one can be set.",
-                e.getMessage());
-      }
-    } finally {
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_INCLUDES.getVarName());
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_EXCLUDES.getVarName());
+      reinitializeInterpreterSettingManager("test,", "config_test,mock_resource_pool");
+      fail("Should not able to create InterpreterSettingManager");
+    } catch (Exception e) {
+      assertEquals("zeppelin.interpreter.include and zeppelin.interpreter.exclude can not be specified together, only one can be set.",
+          e.getMessage());
     }
+  }
+
+  private void reinitializeInterpreterSettingManager(String includes, String excludes) throws Exception {
+    interpreterSettingManager.close();
+    zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_INCLUDES.getVarName(), includes);
+    zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_EXCLUDES.getVarName(), excludes);
+    interpreterSettingManager = new InterpreterSettingManager(zConf,
+        mock(AngularObjectRegistryListener.class), mock(RemoteInterpreterProcessListener.class),
+        mock(ApplicationEventListener.class), storage, pluginManager);
   }
 
   private static class TestAppender extends AppenderSkeleton {

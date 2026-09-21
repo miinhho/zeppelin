@@ -41,17 +41,17 @@ public class SchedulerFactory {
 
   // Using the Initialization-on-demand holder idiom (https://en.wikipedia.org/wiki/Initialization-on-demand_holder_idiom)
   private static final class InstanceHolder {
-    private static final SchedulerFactory INSTANCE = new SchedulerFactory();
+    private static final SchedulerFactory INSTANCE = new SchedulerFactory(SCHEDULER_EXECUTOR_NAME);
   }
 
   public static SchedulerFactory singleton() {
     return InstanceHolder.INSTANCE;
   }
 
-  private SchedulerFactory() {
+  SchedulerFactory(String executorName) {
     int threadPoolSize = getSchedulerPoolSize();
     LOGGER.info("Scheduler Thread Pool Size: {}", threadPoolSize);
-    executor = ExecutorFactory.singleton().createOrGet(SCHEDULER_EXECUTOR_NAME, threadPoolSize);
+    executor = ExecutorFactory.singleton().createOrGet(executorName, threadPoolSize);
   }
 
   private static int getSchedulerPoolSize() {

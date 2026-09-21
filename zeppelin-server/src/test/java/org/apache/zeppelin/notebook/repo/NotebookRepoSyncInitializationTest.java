@@ -54,10 +54,9 @@ class NotebookRepoSyncInitializationTest {
   public void setUp(){
     zConf = ZeppelinConfiguration.load();
     noteParser = new GsonNoteParser(zConf);
-    System.setProperty("zeppelin.isTest", "true");
     zConf.setProperty(ConfVars.ZEPPELIN_PLUGINS_DIR.getVarName(),
         new File("../../../plugins").getAbsolutePath());
-    pluginManager = new PluginManager(zConf);
+    pluginManager = new PluginManager(zConf, true);
   }
 
   @Test

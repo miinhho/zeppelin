@@ -398,7 +398,8 @@ class RemoteInterpreterTest extends AbstractInterpreterTest {
   @Test
   void testFailToLaunchInterpreterProcess_InvalidRunner() {
     try {
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName(), "invalid_runner");
+      zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName(),
+          "invalid_runner");
       final Interpreter interpreter1 = interpreterSetting.getInterpreter("user1", note1Id, "sleep");
       final InterpreterContext context1 = createDummyInterpreterContext();
       // run this dummy interpret method first to launch the RemoteInterpreterProcess to avoid the
@@ -410,15 +411,15 @@ class RemoteInterpreterTest extends AbstractInterpreterTest {
         assertTrue(ExceptionUtils.getStackTrace(e).contains("java.io.IOException"));
       }
     } finally {
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName());
+      // The configuration is recreated for every test fixture.
     }
   }
 
   @Test
   void testFailToLaunchInterpreterProcess_ErrorInRunner() {
     try {
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName(),
-               zeppelinHome.getAbsolutePath() + "/zeppelin-server/src/test/resources/bin/interpreter_invalid.sh");
+      zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName(),
+               projectHome.getAbsolutePath() + "/zeppelin-server/src/test/resources/bin/interpreter_invalid.sh");
       final Interpreter interpreter1 = interpreterSetting.getInterpreter("user1", note1Id, "sleep");
       final InterpreterContext context1 = createDummyInterpreterContext();
       // run this dummy interpret method first to launch the RemoteInterpreterProcess to avoid the
@@ -430,16 +431,16 @@ class RemoteInterpreterTest extends AbstractInterpreterTest {
         assertTrue(ExceptionUtils.getStackTrace(e).contains("invalid_command:"));
       }
     } finally {
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName());
+      // The configuration is recreated for every test fixture.
     }
   }
 
   @Test
   void testFailToLaunchInterpreterProcess_Timeout() {
     try {
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName(),
-              zeppelinHome.getAbsolutePath() + "/zeppelin-server/src/test/resources/bin/interpreter_timeout.sh");
-      System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_CONNECT_TIMEOUT.getVarName(), "10s");
+      zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName(),
+              projectHome.getAbsolutePath() + "/zeppelin-server/src/test/resources/bin/interpreter_timeout.sh");
+      zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_CONNECT_TIMEOUT.getVarName(), "10s");
       final Interpreter interpreter1 = interpreterSetting.getInterpreter("user1", note1Id, "sleep");
       final InterpreterContext context1 = createDummyInterpreterContext();
       // run this dummy interpret method first to launch the RemoteInterpreterProcess to avoid the
@@ -451,8 +452,7 @@ class RemoteInterpreterTest extends AbstractInterpreterTest {
         assertTrue(ExceptionUtils.getStackTrace(e).contains("Interpreter Process creation is time out"));
       }
     } finally {
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_REMOTE_RUNNER.getVarName());
-      System.clearProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_CONNECT_TIMEOUT.getVarName());
+      // The configuration is recreated for every test fixture.
     }
   }
 }

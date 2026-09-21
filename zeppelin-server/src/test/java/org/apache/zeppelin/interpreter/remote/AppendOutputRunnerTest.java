@@ -148,7 +148,9 @@ class AppendOutputRunnerTest {
     Thread thread = new Thread(new BombardEvents(runner));
     thread.start();
     thread.join();
-    Thread.sleep(1000);
+    // Drain anything left after the scheduled run. This preserves the batching assertion without
+    // waiting for an arbitrary scheduler tick.
+    runner.run();
 
     /* NUM_CLUBBED_EVENTS is a heuristic number.
      * It has been observed that for 10,000 continuos event

@@ -40,6 +40,8 @@ class InstallInterpreterTest {
   public void setUp() throws IOException {
     tmpDir = Files.createTempDirectory("InstallInterpreterTest").toFile();
     zConf = ZeppelinConfiguration.load();
+    zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_HOME.getVarName(),
+        tmpDir.getAbsolutePath());
     interpreterBaseDir = new File(tmpDir, "interpreter");
     File localRepoDir = new File(tmpDir, "local-repo");
     interpreterBaseDir.mkdir();
@@ -47,9 +49,6 @@ class InstallInterpreterTest {
 
     File interpreterListFile = new File(tmpDir, "conf/interpreter-list");
 
-
-    // create interpreter list file
-    System.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_HOME.getVarName(), tmpDir.getAbsolutePath());
 
     String interpreterList = "";
     interpreterList += "intp1   org.apache.commons:commons-csv:1.1   test interpreter 1\n";

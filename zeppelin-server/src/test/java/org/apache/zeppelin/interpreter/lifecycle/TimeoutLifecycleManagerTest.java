@@ -50,7 +50,7 @@ class TimeoutLifecycleManagerTest extends AbstractInterpreterTest {
     zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_LIFECYCLE_MANAGER_CLASS.getVarName(),
         TimeoutLifecycleManager.class.getName());
     zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_LIFECYCLE_MANAGER_TIMEOUT_CHECK_INTERVAL.getVarName(), "1000");
-    zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_LIFECYCLE_MANAGER_TIMEOUT_THRESHOLD.getVarName(), "10s");
+    zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_LIFECYCLE_MANAGER_TIMEOUT_THRESHOLD.getVarName(), "2s");
   }
 
   @Override
@@ -66,8 +66,8 @@ class TimeoutLifecycleManagerTest extends AbstractInterpreterTest {
     assertFalse(remoteInterpreter.isOpened());
     InterpreterSetting interpreterSetting = interpreterSettingManager.getInterpreterSettingByName("test");
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
-    Thread.sleep(15*1000);
-    // InterpreterGroup is not removed after 15 seconds, as TimeoutLifecycleManager only manage it after it is started
+    // The interpreter process has not started yet, so TimeoutLifecycleManager has nothing to
+    // manage. Do not wait for its timeout before starting it.
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
 
     InterpreterContext context = InterpreterContext.builder()
@@ -77,7 +77,7 @@ class TimeoutLifecycleManagerTest extends AbstractInterpreterTest {
     remoteInterpreter.interpret("hello world", context);
     assertTrue(remoteInterpreter.isOpened());
 
-    Thread.sleep(15 * 1000);
+    Thread.sleep(5 * 1000);
     // interpreterGroup is timeout, so is removed.
     assertEquals(0, interpreterSetting.getAllInterpreterGroups().size());
   }
@@ -136,7 +136,7 @@ class TimeoutLifecycleManagerTest extends AbstractInterpreterTest {
     InterpreterSetting interpreterSetting = interpreterSettingManager.getInterpreterSettingByName("test");
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
 
-    Thread.sleep(15 * 1000);
+    Thread.sleep(5 * 1000);
     // interpreterGroup is not timeout because getStatus is called periodically.
     assertEquals(1, interpreterSetting.getAllInterpreterGroups().size());
     assertTrue(remoteInterpreter.isOpened());

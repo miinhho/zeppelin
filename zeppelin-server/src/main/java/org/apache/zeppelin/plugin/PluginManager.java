@@ -50,6 +50,7 @@ public class PluginManager {
 
   private final String pluginsDir;
   private final ZeppelinConfiguration zConf;
+  private final boolean loadPluginsFromClasspath;
 
   private Map<String, InterpreterLauncher> cachedLaunchers = new HashMap<>();
 
@@ -62,14 +63,22 @@ public class PluginManager {
 
   @Inject
   public PluginManager(ZeppelinConfiguration zConf) {
+    this(zConf, false);
+  }
+
+  /**
+   * Creates a plugin manager with an explicit classpath-loading policy. Tests use this instead
+   * of a process-wide system property so plugin discovery remains isolated per fixture.
+   */
+  public PluginManager(ZeppelinConfiguration zConf, boolean loadPluginsFromClasspath) {
     pluginsDir = zConf.getPluginsDir();
     this.zConf = zConf;
+    this.loadPluginsFromClasspath = loadPluginsFromClasspath;
   }
 
   public NotebookRepo loadNotebookRepo(String notebookRepoClassName) throws IOException {
     LOGGER.info("Loading NotebookRepo Plugin: {}", notebookRepoClassName);
-    if (builtinNotebookRepoClassNames.contains(notebookRepoClassName) ||
-            Boolean.parseBoolean(System.getProperty("zeppelin.isTest", "false"))) {
+    if (builtinNotebookRepoClassNames.contains(notebookRepoClassName) || loadPluginsFromClasspath) {
       try {
         return (NotebookRepo) (Class.forName(notebookRepoClassName).newInstance());
       } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
@@ -109,8 +118,7 @@ public class PluginManager {
     String launcherClassName = "org.apache.zeppelin.interpreter.launcher." + launcherPlugin;
     LOGGER.info("Loading Interpreter Launcher Plugin: {}", launcherClassName);
 
-    if (builtinLauncherClassNames.contains(launcherClassName) ||
-            Boolean.parseBoolean(System.getProperty("zeppelin.isTest", "false"))) {
+    if (builtinLauncherClassNames.contains(launcherClassName) || loadPluginsFromClasspath) {
       try {
         return (InterpreterLauncher)
                 (Class.forName(launcherClassName))

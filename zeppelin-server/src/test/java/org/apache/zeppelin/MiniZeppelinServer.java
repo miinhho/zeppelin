@@ -32,16 +32,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -215,17 +210,6 @@ public class MiniZeppelinServer implements AutoCloseable {
     return zConf;
   }
 
-  public int getFreePort() {
-    try (ServerSocket serverSocket = new ServerSocket(0)) {
-      assertNotNull(serverSocket);
-      assertTrue(serverSocket.getLocalPort()> 0);
-      return serverSocket.getLocalPort();
-    } catch (IOException e) {
-        fail("Port is not available");
-    }
-    return 0;
-  }
-
   public void start() throws Exception {
     start(false);
   }
@@ -243,7 +227,9 @@ public class MiniZeppelinServer implements AutoCloseable {
       throws Exception {
     LOGGER.info("Starting ZeppelinServer testClassName: {}", classname);
     // copy the resources files to a temp folder
-    zConf.setServerPort(getFreePort());
+    // Let Jetty bind port 0 and discover the actual port after startup. Selecting a free port
+    // with ServerSocket and closing it before Jetty starts has a TOCTOU race under parallel tests.
+    zConf.setServerPort(0);
     zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_HOME.getVarName(),
           zeppelinHome.getAbsolutePath());
     zConf.setProperty(ZeppelinConfiguration.ConfVars.ZEPPELIN_SEARCH_INDEX_PATH.getVarName(),
@@ -272,7 +258,11 @@ public class MiniZeppelinServer implements AutoCloseable {
 
   public boolean checkIfServerIsRunning() {
     boolean isRunning = false;
-    HttpGet httpGet = new HttpGet("http://localhost:" + zConf.getServerPort() + "/api/version");
+    int serverPort = zepServer == null ? zConf.getServerPort() : zepServer.getServerPort();
+    if (serverPort > 0) {
+      zConf.setServerPort(serverPort);
+    }
+    HttpGet httpGet = new HttpGet("http://localhost:" + serverPort + "/api/version");
     try (CloseableHttpResponse response = AbstractTestRestApi.getHttpClient().execute(httpGet)) {
       isRunning = response.getStatusLine().getStatusCode() == 200;
     } catch (IOException e) {
@@ -294,7 +284,7 @@ public class MiniZeppelinServer implements AutoCloseable {
   }
 
   public void shutDown(final boolean deleteConfDir) throws Exception {
-    if (!executor.isShutdown()) {
+    if (executor != null && !executor.isShutdown()) {
       LOGGER.info("ZeppelinServerMock shutDown...");
       zepServer.close();
       executor.shutdown();
