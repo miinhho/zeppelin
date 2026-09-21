@@ -19,6 +19,8 @@ package org.apache.zeppelin.notebook.scheduler;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 import jakarta.inject.Inject;
 
 import org.apache.commons.lang3.StringUtils;
@@ -40,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 public class QuartzSchedulerService implements SchedulerService {
   private static final Logger LOGGER = LoggerFactory.getLogger(QuartzSchedulerService.class);
+  private static final AtomicLong SCHEDULER_ID = new AtomicLong();
 
   private final ZeppelinConfiguration zConf;
   private final Notebook notebook;
@@ -60,7 +63,15 @@ public class QuartzSchedulerService implements SchedulerService {
 
 
   private Scheduler getScheduler() throws SchedulerException {
-    return new StdSchedulerFactory().getScheduler();
+    Properties properties = new Properties();
+    properties.setProperty("org.quartz.scheduler.instanceName",
+        "ZeppelinQuartzScheduler-" + SCHEDULER_ID.incrementAndGet());
+    properties.setProperty("org.quartz.threadPool.class",
+        "org.quartz.simpl.SimpleThreadPool");
+    properties.setProperty("org.quartz.threadPool.threadCount", "10");
+    properties.setProperty("org.quartz.threadPool.threadPriority", "5");
+    properties.setProperty("org.quartz.jobStore.class", "org.quartz.simpl.RAMJobStore");
+    return new StdSchedulerFactory(properties).getScheduler();
   }
 
   @Override
@@ -138,6 +149,13 @@ public class QuartzSchedulerService implements SchedulerService {
     } catch (SchedulerException e) {
       LOGGER.error("Error while getting jobKeys", e);
       return 0;
+    }
+  }
+
+  public void close() throws SchedulerException {
+    if (!scheduler.isShutdown()) {
+      scheduler.clear();
+      scheduler.shutdown(false);
     }
   }
 

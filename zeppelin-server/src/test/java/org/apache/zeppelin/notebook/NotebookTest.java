@@ -43,6 +43,8 @@ import org.apache.commons.io.FilenameUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -81,6 +83,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 
+@Execution(ExecutionMode.SAME_THREAD)
 class NotebookTest extends AbstractInterpreterTest implements ParagraphJobListener {
   private static final Logger LOGGER = LoggerFactory.getLogger(NotebookTest.class);
 
@@ -120,6 +123,12 @@ class NotebookTest extends AbstractInterpreterTest implements ParagraphJobListen
   @Override
   @AfterEach
   public void tearDown() throws Exception {
+    if (schedulerService != null) {
+      schedulerService.close();
+    }
+    if (notebook != null) {
+      notebook.close();
+    }
     super.tearDown();
   }
 
