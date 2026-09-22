@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -32,10 +33,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
+import java.lang.management.ManagementFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,11 +51,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.zeppelin.conf.ZeppelinConfiguration;
 import org.apache.zeppelin.interpreter.InterpreterResult;
 import org.apache.zeppelin.interpreter.InterpreterResultMessage;
+import org.apache.zeppelin.notebook.Note;
+import org.apache.zeppelin.notebook.NoteManager;
+import org.apache.zeppelin.notebook.repo.NotebookRepo;
+import org.apache.zeppelin.user.AuthenticationInfo;
 
 class ParagraphOutputDispatcherTest {
   @Test
@@ -289,38 +296,180 @@ class ParagraphOutputDispatcherTest {
   }
 
   @Test
-  void readyNotesWaitForWorkerCapacityAndReuseReleasedWorkers() throws Exception {
+  void blockedCheckpointsDoNotOccupyOutputWorkersOrReleaseTheirNotes() throws Exception {
     RemoteInterpreterProcessListener listener = mock(RemoteInterpreterProcessListener.class);
-    CountDownLatch occupied = new CountDownLatch(2);
+    CountDownLatch entered = new CountDownLatch(2);
     CountDownLatch release = new CountDownLatch(1);
-    AtomicInteger active = new AtomicInteger();
-    AtomicInteger maximum = new AtomicInteger();
+    CountDownLatch unrelatedOutput = new CountDownLatch(1);
+    CountDownLatch laterOutput = new CountDownLatch(1);
     doAnswer(call -> {
-      maximum.accumulateAndGet(active.incrementAndGet(), Math::max);
-      try {
-        if (!"C".equals(call.getArgument(0))) {
-          occupied.countDown();
-          assertTrue(release.await(5, TimeUnit.SECONDS));
-        }
-      } finally {
-        active.decrementAndGet();
-      }
+      entered.countDown();
+      awaitIgnoringInterrupt(release);
       return null;
     }).when(listener).checkpointOutput(anyString(), anyString());
+    doAnswer(call -> {
+      unrelatedOutput.countDown();
+      return null;
+    }).when(listener).onOutputAppend("C", "para", 0, "unrelated");
+    doAnswer(call -> {
+      laterOutput.countDown();
+      return null;
+    }).when(listener).onOutputAppend("A", "para", 0, "later");
     try (ParagraphOutputDispatcher dispatcher = new ParagraphOutputDispatcher(listener, 2)) {
       Future<Void> first = dispatcher.checkpointOutput("A", "para");
       Future<Void> second = dispatcher.checkpointOutput("B", "para");
-      assertTrue(occupied.await(5, TimeUnit.SECONDS));
+      assertTrue(entered.await(5, TimeUnit.SECONDS));
+      dispatcher.appendOutput("A", "para", 0, "later");
+      dispatcher.appendOutput("C", "para", 0, "unrelated");
       Future<Void> third = dispatcher.checkpointOutput("C", "para");
-      assertThrows(TimeoutException.class, () -> third.get(100, TimeUnit.MILLISECONDS));
+      dispatcher.flush();
+      assertTrue(unrelatedOutput.await(5, TimeUnit.SECONDS));
+      assertFalse(laterOutput.await(100, TimeUnit.MILLISECONDS));
+      assertFalse(first.isDone());
+      assertFalse(second.isDone());
+      assertFalse(third.isDone());
+      verify(listener, never()).checkpointOutput("C", "para");
       release.countDown();
       first.get(5, TimeUnit.SECONDS);
       second.get(5, TimeUnit.SECONDS);
       third.get(5, TimeUnit.SECONDS);
-      assertEquals(2, maximum.get());
+      assertTrue(laterOutput.await(5, TimeUnit.SECONDS));
       verify(listener).checkpointOutput("A", "para");
       verify(listener).checkpointOutput("B", "para");
-      verify(listener).checkpointOutput("C", "para");
+      InOrder order = inOrder(listener);
+      order.verify(listener).checkpointOutput("A", "para");
+      order.verify(listener).onOutputAppend("A", "para", 0, "later");
+    } finally {
+      release.countDown();
+    }
+  }
+
+  @Test
+  void noteManagerSaveLockDoesNotOccupyOutputWorkers() throws Exception {
+    NotebookRepo repo = mock(NotebookRepo.class);
+    when(repo.list(any())).thenReturn(Collections.emptyMap());
+    NoteManager manager = new NoteManager(repo, ZeppelinConfiguration.load());
+    Note firstNote = new Note();
+    firstNote.setId("A");
+    firstNote.setPath("/A");
+    Note secondNote = new Note();
+    secondNote.setId("B");
+    secondNote.setPath("/B");
+    Note unrelatedNote = new Note();
+    unrelatedNote.setId("C");
+    unrelatedNote.setPath("/C");
+    manager.saveNote(unrelatedNote);
+    CountDownLatch saveStarted = new CountDownLatch(1);
+    CountDownLatch releaseSave = new CountDownLatch(1);
+    AtomicReference<Thread> savingThread = new AtomicReference<>();
+    doAnswer(call -> {
+      if (call.getArgument(0) == firstNote) {
+        savingThread.set(Thread.currentThread());
+        saveStarted.countDown();
+        awaitIgnoringInterrupt(releaseSave);
+      }
+      return null;
+    }).when(repo).save(any(), any());
+
+    RemoteInterpreterProcessListener listener = mock(RemoteInterpreterProcessListener.class);
+    doAnswer(call -> {
+      manager.saveNote(firstNote);
+      return null;
+    }).when(listener).checkpointOutput("A", "para");
+    CountDownLatch secondStarted = new CountDownLatch(1);
+    AtomicReference<Thread> secondThread = new AtomicReference<>();
+    doAnswer(call -> {
+      secondThread.set(Thread.currentThread());
+      secondStarted.countDown();
+      manager.saveNote(secondNote);
+      return null;
+    }).when(listener).checkpointOutput("B", "para");
+    CountDownLatch unrelatedOutput = new CountDownLatch(1);
+    doAnswer(call -> {
+      manager.processNote("C", note -> {
+        unrelatedOutput.countDown();
+        return null;
+      });
+      return null;
+    }).when(listener).onOutputAppend("C", "para", 0, "output");
+
+    try (ParagraphOutputDispatcher dispatcher = new ParagraphOutputDispatcher(listener, 2)) {
+      Future<Void> first = dispatcher.checkpointOutput("A", "para");
+      assertTrue(saveStarted.await(5, TimeUnit.SECONDS));
+      Future<Void> second = dispatcher.checkpointOutput("B", "para");
+      assertTrue(secondStarted.await(5, TimeUnit.SECONDS));
+      await().atMost(Duration.ofSeconds(5)).until(() ->
+          secondThread.get().getState() == Thread.State.BLOCKED
+              && ManagementFactory.getThreadMXBean().getThreadInfo(secondThread.get().getId())
+                  .getLockOwnerId() == savingThread.get().getId());
+      dispatcher.appendOutput("C", "para", 0, "output");
+      dispatcher.flush();
+      assertTrue(unrelatedOutput.await(5, TimeUnit.SECONDS));
+      assertFalse(first.isDone());
+      assertFalse(second.isDone());
+      releaseSave.countDown();
+      first.get(5, TimeUnit.SECONDS);
+      second.get(5, TimeUnit.SECONDS);
+      verify(repo).save(firstNote, AuthenticationInfo.ANONYMOUS);
+      verify(repo).save(secondNote, AuthenticationInfo.ANONYMOUS);
+    } finally {
+      releaseSave.countDown();
+    }
+  }
+
+  @Test
+  void failedCheckpointReleasesItsNoteForLaterOutput() throws Exception {
+    RemoteInterpreterProcessListener listener = mock(RemoteInterpreterProcessListener.class);
+    doThrow(new IllegalStateException("save failed")).when(listener)
+        .checkpointOutput("note", "para");
+    CountDownLatch delivered = new CountDownLatch(1);
+    doAnswer(call -> {
+      delivered.countDown();
+      return null;
+    }).when(listener).onOutputAppend("note", "para", 0, "after");
+    try (ParagraphOutputDispatcher dispatcher = new ParagraphOutputDispatcher(listener, 1)) {
+      Future<Void> checkpoint = dispatcher.checkpointOutput("note", "para");
+      dispatcher.appendOutput("note", "para", 0, "after");
+      ExecutionException failure = assertThrows(ExecutionException.class,
+          () -> checkpoint.get(5, TimeUnit.SECONDS));
+      assertEquals("save failed", failure.getCause().getMessage());
+      assertTrue(delivered.await(5, TimeUnit.SECONDS));
+      InOrder order = inOrder(listener);
+      order.verify(listener).checkpointOutput("note", "para");
+      order.verify(listener).onOutputAppend("note", "para", 0, "after");
+    }
+  }
+
+  @Test
+  void checkpointStopsBatchBeforeLaterAppend() throws Exception {
+    RemoteInterpreterProcessListener listener = mock(RemoteInterpreterProcessListener.class);
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    CountDownLatch later = new CountDownLatch(1);
+    doAnswer(call -> {
+      entered.countDown();
+      awaitIgnoringInterrupt(release);
+      return null;
+    }).when(listener).onOutputAppend("blocker", "para", 0, "busy");
+    doAnswer(call -> {
+      later.countDown();
+      return null;
+    }).when(listener).onOutputAppend("note", "para", 0, "after");
+    try (ParagraphOutputDispatcher dispatcher = new ParagraphOutputDispatcher(listener, 1)) {
+      dispatcher.appendOutput("blocker", "para", 0, "busy");
+      dispatcher.flush();
+      assertTrue(entered.await(5, TimeUnit.SECONDS));
+      dispatcher.appendOutput("note", "para", 0, "before");
+      Future<Void> checkpoint = dispatcher.checkpointOutput("note", "para");
+      dispatcher.appendOutput("note", "para", 0, "after");
+      dispatcher.flush();
+      release.countDown();
+      checkpoint.get(5, TimeUnit.SECONDS);
+      assertTrue(later.await(5, TimeUnit.SECONDS));
+      InOrder order = inOrder(listener);
+      order.verify(listener).onOutputAppend("note", "para", 0, "before");
+      order.verify(listener).checkpointOutput("note", "para");
+      order.verify(listener).onOutputAppend("note", "para", 0, "after");
     } finally {
       release.countDown();
     }
