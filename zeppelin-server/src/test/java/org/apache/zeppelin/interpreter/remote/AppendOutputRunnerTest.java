@@ -59,7 +59,7 @@ class AppendOutputRunnerTest {
   }
 
   @Test
-  void preservesOrderAndDoesNotMergeDifferentOutputKeys() {
+  void mergesEachOutputKeyInFirstAppearanceOrder() {
     RemoteInterpreterProcessListener listener = mock(RemoteInterpreterProcessListener.class);
     AppendOutputRunner runner = new AppendOutputRunner(listener);
     List<AppendOutputBuffer> batch = new ArrayList<>();
@@ -70,11 +70,10 @@ class AppendOutputRunnerTest {
     batch.add(new AppendOutputBuffer("note:1", "p:1", 0, "fifth"));
     runner.run(batch);
     InOrder order = inOrder(listener);
-    order.verify(listener).onOutputAppend("note:1", "p:1", 0, "first");
+    order.verify(listener).onOutputAppend("note:1", "p:1", 0, "firstfifth");
     order.verify(listener).onOutputAppend("note:1", "p:2", 0, "second");
     order.verify(listener).onOutputAppend("note:1", "p:1", 1, "third");
     order.verify(listener).onOutputAppend("note:2", "p:1", 1, "fourth");
-    order.verify(listener).onOutputAppend("note:1", "p:1", 0, "fifth");
     order.verifyNoMoreInteractions();
   }
 
