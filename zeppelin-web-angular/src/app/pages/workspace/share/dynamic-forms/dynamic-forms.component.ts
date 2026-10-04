@@ -61,6 +61,7 @@ export class NotebookParagraphDynamicFormsComponent implements OnInit, OnChanges
   formChange$ = new Subject<void>();
   forms: DynamicFormsItem[] = [];
   formType = DynamicFormsType;
+  compareOptionValues = isEqual;
   checkboxGroups: {
     [key: string]: NzCheckboxOption[];
   } = {};
