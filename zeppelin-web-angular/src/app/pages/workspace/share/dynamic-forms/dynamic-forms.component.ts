@@ -23,11 +23,22 @@ import {
   SimpleChanges
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { isEqual } from 'lodash';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 
 import { NzCheckboxOption } from 'ng-zorro-antd/checkbox';
 
 import { DynamicForms, DynamicFormsItem, DynamicFormsType, DynamicFormParams } from '@zeppelin/sdk';
+
+const canonicalFormTypes: Record<DynamicFormsType, DynamicFormsType> = {
+  TextBox: DynamicFormsType.TextBox,
+  Password: DynamicFormsType.Password,
+  Select: DynamicFormsType.Select,
+  CheckBox: DynamicFormsType.CheckBox,
+  input: DynamicFormsType.TextBox,
+  select: DynamicFormsType.Select,
+  checkbox: DynamicFormsType.CheckBox
+};
 
 @Component({
   selector: 'zeppelin-notebook-paragraph-dynamic-forms',
@@ -54,7 +65,7 @@ export class NotebookParagraphDynamicFormsComponent implements OnInit, OnChanges
     [key: string]: NzCheckboxOption[];
   } = {};
   checkboxValues: {
-    [key: string]: Array<string | number>;
+    [key: string]: number[];
   } = {};
 
   @HostListener('keydown.enter')
@@ -71,27 +82,44 @@ export class NotebookParagraphDynamicFormsComponent implements OnInit, OnChanges
   setForms() {
     this.forms = Object.values(this.formDefs);
     this.checkboxGroups = {};
+    this.checkboxValues = {};
     this.forms.forEach(e => {
-      if (!this.paramDefs[e.name]) {
+      if (this.paramDefs[e.name] === undefined) {
         this.paramDefs[e.name] = e.defaultValue;
       }
-      if (e.type === DynamicFormsType.CheckBox) {
+      if (this.canonicalFormType(e.type) === DynamicFormsType.CheckBox) {
         // CheckBox type should have defined 'options'.
         // ng-zorro v19 split nz-checkbox-group into `nzOptions` (the {label, value}
         // choices) and an ngModel that holds the selected values directly, instead
         // of a single array of {label, value, checked} objects.
-        this.checkboxGroups[e.name] = e.options!.map(opt => ({
-          label: opt.displayName || opt.value,
-          value: opt.value
+        this.checkboxGroups[e.name] = (e.options ?? []).map((opt, index) => ({
+          label: opt.displayName || this.optionLabel(opt.value),
+          value: index
         }));
         const param = this.paramDefs[e.name];
-        this.checkboxValues[e.name] = Array.isArray(param) ? [...param] : [];
+        this.checkboxValues[e.name] = [];
+        (e.options ?? []).forEach((opt, index) => {
+          if (Array.isArray(param) && param.some(value => isEqual(value, opt.value))) {
+            this.checkboxValues[e.name].push(index);
+          }
+        });
       }
     });
   }
 
-  checkboxChange(value: Array<string | number>, name: string) {
-    this.paramDefs[name] = value as string[];
+  canonicalFormType(type: DynamicFormsType): DynamicFormsType {
+    return canonicalFormTypes[type];
+  }
+
+  optionLabel(value: DynamicFormsItem['defaultValue']): string {
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  checkboxChange(value: number[], name: string) {
+    const options = this.formDefs[name].options ?? [];
+    this.paramDefs[name] = value
+      .filter(index => index >= 0 && index < options.length)
+      .map(index => options[index].value);
     this.onFormChange();
   }
 
