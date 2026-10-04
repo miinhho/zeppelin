@@ -28,7 +28,7 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 
 import { NzCheckboxOption } from 'ng-zorro-antd/checkbox';
 
-import { DynamicForms, DynamicFormsItem, DynamicFormsType, DynamicFormParams } from '@zeppelin/sdk';
+import { DynamicForms, DynamicFormsItem, DynamicFormsType, DynamicFormParams, FormValue } from '@zeppelin/sdk';
 
 const canonicalFormTypes: Record<DynamicFormsType, DynamicFormsType> = {
   TextBox: DynamicFormsType.TextBox,
@@ -84,24 +84,27 @@ export class NotebookParagraphDynamicFormsComponent implements OnInit, OnChanges
     this.forms = Object.values(this.formDefs);
     this.checkboxGroups = {};
     this.checkboxValues = {};
-    this.forms.forEach(e => {
-      if (this.paramDefs[e.name] === undefined) {
-        this.paramDefs[e.name] = e.defaultValue;
+    this.forms.forEach(form => {
+      if (this.paramDefs[form.name] === undefined) {
+        this.paramDefs[form.name] = form.defaultValue;
       }
-      if (this.canonicalFormType(e.type) === DynamicFormsType.CheckBox) {
-        // CheckBox type should have defined 'options'.
-        // ng-zorro v19 split nz-checkbox-group into `nzOptions` (the {label, value}
-        // choices) and an ngModel that holds the selected values directly, instead
-        // of a single array of {label, value, checked} objects.
-        this.checkboxGroups[e.name] = (e.options ?? []).map((opt, index) => ({
-          label: opt.displayName || this.optionLabel(opt.value),
+
+      if (this.canonicalFormType(form.type) === DynamicFormsType.CheckBox) {
+        const options = form.options ?? [];
+        const param = this.paramDefs[form.name];
+        const selectedValues = Array.isArray(param) ? param : [];
+
+        // NG-Zorro checkboxes require primitive values. Option indexes preserve
+        // Zeppelin's scalar, object and array values at the UI boundary.
+        this.checkboxGroups[form.name] = options.map((option, index) => ({
+          label: option.displayName || this.optionLabel(option.value),
           value: index
         }));
-        const param = this.paramDefs[e.name];
-        this.checkboxValues[e.name] = [];
-        (e.options ?? []).forEach((opt, index) => {
-          if (Array.isArray(param) && param.some(value => isEqual(value, opt.value))) {
-            this.checkboxValues[e.name].push(index);
+
+        this.checkboxValues[form.name] = [];
+        options.forEach((option, index) => {
+          if (selectedValues.some(value => isEqual(value, option.value))) {
+            this.checkboxValues[form.name].push(index);
           }
         });
       }
@@ -112,7 +115,7 @@ export class NotebookParagraphDynamicFormsComponent implements OnInit, OnChanges
     return canonicalFormTypes[type];
   }
 
-  optionLabel(value: DynamicFormsItem['defaultValue']): string {
+  optionLabel(value: FormValue): string {
     return typeof value === 'string' ? value : JSON.stringify(value);
   }
 
