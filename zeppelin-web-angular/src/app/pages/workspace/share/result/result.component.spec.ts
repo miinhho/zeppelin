@@ -12,7 +12,13 @@
 
 import { CdkPortalOutlet, PortalModule } from '@angular/cdk/portal';
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Injector, NO_ERRORS_SCHEMA, provideZoneChangeDetection, ViewContainerRef } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Injector,
+  NO_ERRORS_SCHEMA,
+  provideZoneChangeDetection,
+  ViewContainerRef
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { DatasetType, GraphConfig } from '@zeppelin/sdk';
@@ -352,48 +358,51 @@ describe('result type transitions', () => {
     expect(destroyInstance).toHaveBeenCalledExactlyOnceWith('pparagraph_classic', false, previousInstance);
   });
 
-  it.each([DatasetType.SVG, DatasetType.NULL])('removes classic visualization containers for %s in the template', async type => {
-    await TestBed.configureTestingModule({
-      declarations: [NotebookParagraphResultComponent],
-      imports: [CommonModule, PortalModule],
-      schemas: [NO_ERRORS_SCHEMA],
-      providers: [
-        provideZoneChangeDetection(),
-        { provide: RuntimeCompilerService, useValue: {} },
-        { provide: NgZService, useValue: { contextChanged: () => EMPTY } },
-        { provide: HeliumService, useValue: { visualizationBundles: () => EMPTY } },
-        { provide: ClassicVisualizationService, useValue: { destroyAllInstances: vi.fn() } }
-      ]
-    })
-      .overrideComponent(NotebookParagraphResultComponent, {
-        set: { template, templateUrl: undefined, styles: [], styleUrls: [] }
+  it.each([DatasetType.SVG, DatasetType.NULL])(
+    'removes classic visualization containers for %s in the template',
+    async type => {
+      await TestBed.configureTestingModule({
+        declarations: [NotebookParagraphResultComponent],
+        imports: [CommonModule, PortalModule],
+        schemas: [NO_ERRORS_SCHEMA],
+        providers: [
+          provideZoneChangeDetection(),
+          { provide: RuntimeCompilerService, useValue: {} },
+          { provide: NgZService, useValue: { contextChanged: () => EMPTY } },
+          { provide: HeliumService, useValue: { visualizationBundles: () => EMPTY } },
+          { provide: ClassicVisualizationService, useValue: { destroyAllInstances: vi.fn() } }
+        ]
       })
-      .compileComponents();
-    const fixture = TestBed.createComponent(NotebookParagraphResultComponent);
-    const result = fixture.componentInstance;
-    result.published = true;
-    result.id = 'paragraph';
-    result.visualizations.push({
-      id: 'classic',
-      name: 'classic',
-      isClassic: true,
-      icon: {},
-      Class: vi.fn() as unknown as HeliumClassicVisualizationConstructor,
-      instance: undefined,
-      changeSubscription: null
-    });
-    result.config = { graph: { ...new GraphConfig(), mode: 'classic' } };
-    result.result = { type: DatasetType.TABLE, data: 'column\nvalue' };
-    vi.spyOn(result, 'renderGraph').mockImplementation(() => {});
-    fixture.detectChanges();
-    const element = fixture.nativeElement as HTMLElement;
-    const containers = '.classic-visualization-container, .transformation-setting, .visualization-setting';
-    expect(element.querySelectorAll(containers)).toHaveLength(3);
+        .overrideComponent(NotebookParagraphResultComponent, {
+          set: { template, templateUrl: undefined, styles: [], styleUrls: [] }
+        })
+        .compileComponents();
+      const fixture = TestBed.createComponent(NotebookParagraphResultComponent);
+      const result = fixture.componentInstance;
+      result.published = true;
+      result.id = 'paragraph';
+      result.visualizations.push({
+        id: 'classic',
+        name: 'classic',
+        isClassic: true,
+        icon: {},
+        Class: vi.fn() as unknown as HeliumClassicVisualizationConstructor,
+        instance: undefined,
+        changeSubscription: null
+      });
+      result.config = { graph: { ...new GraphConfig(), mode: 'classic' } };
+      result.result = { type: DatasetType.TABLE, data: 'column\nvalue' };
+      vi.spyOn(result, 'renderGraph').mockImplementation(() => {});
+      fixture.detectChanges();
+      const element = fixture.nativeElement as HTMLElement;
+      const containers = '.classic-visualization-container, .transformation-setting, .visualization-setting';
+      expect(element.querySelectorAll(containers)).toHaveLength(3);
 
-    result.updateResult(result.config, { type, data: '<svg />' });
-    fixture.detectChanges();
+      result.updateResult(result.config, { type, data: '<svg />' });
+      fixture.detectChanges();
 
-    expect(element.querySelectorAll(containers)).toHaveLength(0);
-    expect(element.querySelectorAll('img')).toHaveLength(type === DatasetType.SVG ? 1 : 0);
-  });
+      expect(element.querySelectorAll(containers)).toHaveLength(0);
+      expect(element.querySelectorAll('img')).toHaveLength(type === DatasetType.SVG ? 1 : 0);
+    }
+  );
 });
