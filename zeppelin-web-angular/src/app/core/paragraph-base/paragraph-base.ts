@@ -43,8 +43,6 @@ import { ParagraphOutputState } from './paragraph-output-state';
 
 export const ParagraphStatus = ParagraphStates;
 
-const isTerminalParagraphStatus = isTerminalParagraphState;
-
 export abstract class ParagraphBase extends MessageListenersManager {
   paragraph?: ParagraphItem;
   dirtyText?: string;
@@ -167,7 +165,7 @@ export abstract class ParagraphBase extends MessageListenersManager {
       this.outputState.reset();
     }
     // Close the stream before publishing the terminal snapshot.
-    if (isTerminalParagraphStatus(newPara.status)) {
+    if (isTerminalParagraphState(newPara.status)) {
       this.outputState.finish(newPara.results?.msg);
     }
     if (this.isUpdateRequired(oldPara, newPara)) {
@@ -241,7 +239,7 @@ export abstract class ParagraphBase extends MessageListenersManager {
 
   private initializeOutputState(): void {
     if (!this.outputState.isInitialized) {
-      this.outputState.reset(this.results, isTerminalParagraphStatus(this.paragraph?.status));
+      this.outputState.reset(this.results, isTerminalParagraphState(this.paragraph?.status));
     }
   }
 
@@ -306,7 +304,7 @@ export abstract class ParagraphBase extends MessageListenersManager {
         newPara.jobName !== oldPara.jobName ||
         newPara.title !== oldPara.title ||
         isEmpty(newPara.results) !== isEmpty(oldPara.results) ||
-        (isTerminalParagraphStatus(newPara.status) && !isEqual(newPara.results?.msg, oldPara.results?.msg)) ||
+        (isTerminalParagraphState(newPara.status) && !isEqual(newPara.results?.msg, oldPara.results?.msg)) ||
         newPara.errorMessage !== oldPara.errorMessage ||
         !isEqual(newPara.settings, oldPara.settings) ||
         !isEqual(newPara.config, oldPara.config) ||
@@ -475,7 +473,7 @@ export abstract class ParagraphBase extends MessageListenersManager {
     if (paragraph) {
       this.setResults(paragraph);
     }
-    const terminal = isTerminalParagraphStatus(paragraph?.status);
+    const terminal = isTerminalParagraphState(paragraph?.status);
     this.outputState.reset(this.results, terminal);
     this.cdr.markForCheck();
   }

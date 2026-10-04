@@ -346,8 +346,7 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
         this.renderImg();
         break;
       case DatasetType.SVG:
-        this.angularComponent = null;
-        this.imgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(this.result.data)}`;
+        this.renderSvg();
         break;
       case DatasetType.ANGULAR:
         this.renderAngular();
@@ -422,6 +421,11 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
 
   renderImg(): void {
     this.imgData = this.sanitizer.bypassSecurityTrustUrl(`data:image/png;base64,${this.result.data}`);
+  }
+
+  renderSvg(): void {
+    this.angularComponent = null;
+    this.imgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(this.result.data)}`;
   }
 
   setGraphConfig() {
