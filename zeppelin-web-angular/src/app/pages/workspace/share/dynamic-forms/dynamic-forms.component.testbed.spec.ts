@@ -14,6 +14,7 @@ import { NO_ERRORS_SCHEMA, provideZoneChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { DynamicForms, DynamicFormsType, FormValue } from '@zeppelin/sdk';
+import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { describe, expect, it } from 'vitest';
 
@@ -62,4 +63,76 @@ describe('Select form hydration (TestBed)', () => {
     expect(selected?.textContent).toContain('Option A');
     expect(fixture.componentInstance.paramDefs.field).toEqual(value);
   });
+});
+
+describe('Checkbox form interaction (TestBed)', () => {
+  it.each([DynamicFormsType.CheckBox, DynamicFormsType.LegacyCheckBox])(
+    'submits original %s values and restores selection after a broadcast',
+    async type => {
+      await TestBed.configureTestingModule({
+        declarations: [NotebookParagraphDynamicFormsComponent],
+        imports: [FormsModule, NzCheckboxModule],
+        providers: [provideZoneChangeDetection()],
+        schemas: [NO_ERRORS_SCHEMA]
+      })
+        .overrideComponent(NotebookParagraphDynamicFormsComponent, {
+          set: { template, templateUrl: undefined, styles: [], styleUrls: [] }
+        })
+        .compileComponents();
+
+      const fixture = TestBed.createComponent(NotebookParagraphDynamicFormsComponent);
+      const formDefs: DynamicForms = {
+        field: {
+          name: 'field',
+          type,
+          hidden: false,
+          defaultValue: [],
+          options: [false, 0, '', { id: 'a' }, ['a', 42]].map(value => ({ value }))
+        }
+      };
+      fixture.componentRef.setInput('formDefs', formDefs);
+      fixture.componentRef.setInput('paramDefs', { field: [] });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const inputs = Array.from(fixture.nativeElement.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
+      expect(inputs).toHaveLength(5);
+      for (const input of inputs) {
+        input.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+      }
+      inputs[1].click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const expectedValues = [false, '', { id: 'a' }, ['a', 42]];
+      expect(fixture.componentInstance.paramDefs.field).toEqual(expectedValues);
+      const submitted: string[] = [];
+      fixture.componentInstance.formChange.subscribe(() => {
+        submitted.push(JSON.stringify(fixture.componentInstance.paramDefs));
+      });
+      fixture.nativeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(submitted).toEqual([JSON.stringify({ field: expectedValues })]);
+
+      const broadcast = JSON.parse(JSON.stringify({ forms: formDefs, params: JSON.parse(submitted[0]) })) as {
+        forms: DynamicForms;
+        params: { field: FormValue };
+      };
+      fixture.componentRef.setInput('formDefs', broadcast.forms);
+      fixture.componentRef.setInput('paramDefs', broadcast.params);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const restored = Array.from(
+        fixture.nativeElement.querySelectorAll('input[type="checkbox"]')
+      ) as HTMLInputElement[];
+      expect(restored.map(input => input.checked)).toEqual([true, false, true, true, true]);
+      expect(fixture.componentInstance.paramDefs.field).toEqual(expectedValues);
+      expect(submitted).toHaveLength(1);
+    }
+  );
 });
