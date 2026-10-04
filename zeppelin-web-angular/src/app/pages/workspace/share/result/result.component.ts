@@ -345,9 +345,23 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
       case DatasetType.IMG:
         this.renderImg();
         break;
+      case DatasetType.SVG:
+        this.angularComponent = null;
+        this.imgData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(this.result.data)}`;
+        break;
       case DatasetType.ANGULAR:
         this.renderAngular();
         break;
+      case DatasetType.NULL:
+        this.angularComponent = null;
+        break;
+      case DatasetType.NETWORK:
+        // NULL has no display; NETWORK has no renderer in the Angular UI.
+        break;
+      default: {
+        const unhandled: never = this.result.type;
+        throw new Error(`Unsupported dataset type: ${unhandled}`);
+      }
     }
     this.cdr.detectChanges();
   }

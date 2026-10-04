@@ -23,6 +23,8 @@ import {
   ParagraphConfigResults,
   ParagraphEditorSetting,
   ParagraphItem,
+  ParagraphStates,
+  isTerminalParagraphState,
   ParagraphIResultsMsgItem,
   WebSocketMessage
 } from '@zeppelin/sdk';
@@ -39,17 +41,9 @@ import { AngularContextManager } from './angular-context-manager';
 import { NoteStatus } from './note-status';
 import { ParagraphOutputState } from './paragraph-output-state';
 
-export const ParagraphStatus = {
-  READY: 'READY',
-  PENDING: 'PENDING',
-  RUNNING: 'RUNNING',
-  FINISHED: 'FINISHED',
-  ABORT: 'ABORT',
-  ERROR: 'ERROR'
-};
+export const ParagraphStatus = ParagraphStates;
 
-const isTerminalParagraphStatus = (status?: string): boolean =>
-  status === ParagraphStatus.FINISHED || status === ParagraphStatus.ABORT || status === ParagraphStatus.ERROR;
+const isTerminalParagraphStatus = isTerminalParagraphState;
 
 export abstract class ParagraphBase extends MessageListenersManager {
   paragraph?: ParagraphItem;

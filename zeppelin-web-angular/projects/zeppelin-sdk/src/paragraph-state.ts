@@ -10,6 +10,18 @@
  * limitations under the License.
  */
 
-export * from './interfaces/public-api';
-export * from './message';
-export * from './paragraph-state';
+import { ParagraphState } from './interfaces/message-paragraph.interface';
+
+// Job.Status.isCompleted: FINISHED, ERROR and ABORT terminate a run.
+const terminalStates: Record<ParagraphState, boolean> = {
+  UNKNOWN: false,
+  READY: false,
+  PENDING: false,
+  RUNNING: false,
+  FINISHED: true,
+  ERROR: true,
+  ABORT: true
+};
+
+export const isTerminalParagraphState = (status: ParagraphState | undefined): boolean =>
+  status !== undefined && terminalStates[status];

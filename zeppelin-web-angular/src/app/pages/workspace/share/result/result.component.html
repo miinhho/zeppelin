@@ -103,6 +103,9 @@
     @case (datasetType.IMG) {
       <div class="img"><img [src]="imgData" alt="img" /></div>
     }
+    @case (datasetType.SVG) {
+      <div class="img"><img [src]="imgData" alt="svg" /></div>
+    }
   }
   @if (frontEndError) {
     <div class="text-plain">

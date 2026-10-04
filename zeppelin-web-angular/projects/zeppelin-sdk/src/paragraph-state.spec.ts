@@ -10,6 +10,15 @@
  * limitations under the License.
  */
 
-export * from './interfaces/public-api';
-export * from './message';
-export * from './paragraph-state';
+import { expect, it } from 'vitest';
+
+import { ParagraphStates } from './interfaces/message-paragraph.interface';
+import { isTerminalParagraphState } from './paragraph-state';
+
+it.each(Object.values(ParagraphStates))('classifies %s using Job.Status.isCompleted', status => {
+  expect(isTerminalParagraphState(status)).toBe(['FINISHED', 'ERROR', 'ABORT'].includes(status));
+});
+
+it('does not treat a missing paragraph as a completed run', () => {
+  expect(isTerminalParagraphState(undefined)).toBe(false);
+});
