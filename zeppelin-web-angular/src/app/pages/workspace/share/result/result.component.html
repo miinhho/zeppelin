@@ -69,7 +69,7 @@
   }
   <ng-template cdkPortalOutlet></ng-template>
   <!-- Transformation setting container for classic visualizations -->
-  @if (getCurrentVisualization()?.isClassic) {
+  @if (result.type === datasetType.TABLE && getCurrentVisualization()?.isClassic) {
     <div
       [style.display]="config?.graph?.optionOpen ? 'block' : 'none'"
       [id]="'trsetting' + id + '_' + config?.graph?.mode"
@@ -77,14 +77,14 @@
     ></div>
   }
   <!-- Visualization setting container for classic visualizations -->
-  @if (getCurrentVisualization()?.isClassic) {
+  @if (result.type === datasetType.TABLE && getCurrentVisualization()?.isClassic) {
     <div
       [style.display]="config?.graph?.optionOpen ? 'block' : 'none'"
       [id]="'vizsetting' + id + '_' + config?.graph?.mode"
       class="visualization-setting"
     ></div>
   }
-  @if (getCurrentVisualization()?.isClassic) {
+  @if (result.type === datasetType.TABLE && getCurrentVisualization()?.isClassic) {
     <div [id]="'p' + id + '_' + config?.graph?.mode" class="classic-visualization-container"></div>
   }
   @switch (result?.type) {

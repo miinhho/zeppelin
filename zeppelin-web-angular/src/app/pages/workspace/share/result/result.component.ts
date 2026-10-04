@@ -338,6 +338,12 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
     }
     this.renderGeneration++;
     this.frontEndError = '';
+    if (this.result.type !== DatasetType.TABLE) {
+      this.destroyVisualizations();
+      if (this.portalOutlet?.hasAttached()) {
+        this.portalOutlet.detach();
+      }
+    }
     switch (this.result.type) {
       case DatasetType.TABLE:
         this.renderGraph();
@@ -365,7 +371,9 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
         break;
       default: {
         const unhandled: never = this.result.type;
-        throw new Error(`Unsupported dataset type: ${unhandled}`);
+        this.angularComponent = null;
+        this.frontEndError = `Unsupported dataset type: ${unhandled}`;
+        break;
       }
     }
     this.cdr.detectChanges();
@@ -479,6 +487,12 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
       if (visualizationItem.isClassic) {
         // Classic visualization - delegate to ClassicVisualizationService
         const targetElementId = `p${this.id}_${config.graph.mode}`;
+        const generation = this.renderGeneration;
+        const shouldCreate = () =>
+          !this.destroyed &&
+          generation === this.renderGeneration &&
+          this.result.type === DatasetType.TABLE &&
+          targetElementId === `p${this.id}_${this.config?.graph?.mode}`;
         const emitter = (c: GraphConfig) => {
           if (!this.config) {
             throw new Error('config is not defined');
@@ -488,8 +502,22 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
         };
 
         this.classicVisualizationService
-          .createClassicVisualization(visualizationItem.Class, targetElementId, config.graph, this.tableData, emitter)
+          .createClassicVisualization(
+            visualizationItem.Class,
+            targetElementId,
+            config.graph,
+            this.tableData,
+            emitter,
+            shouldCreate
+          )
           .then(classicInstance => {
+            if (!classicInstance) {
+              return;
+            }
+            if (!shouldCreate()) {
+              this.classicVisualizationService.destroyInstance(targetElementId, false, classicInstance);
+              return;
+            }
             visualizationItem.instance = classicInstance;
             this.cdr.markForCheck();
           })

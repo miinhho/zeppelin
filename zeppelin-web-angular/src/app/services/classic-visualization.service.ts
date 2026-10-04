@@ -100,11 +100,20 @@ export class ClassicVisualizationService {
     };
   }
 
-  private waitForElement(elementId: string, maxRetries = 50, interval = 100): Promise<HTMLElement> {
+  private waitForElement(
+    elementId: string,
+    shouldCreate: () => boolean,
+    maxRetries = 50,
+    interval = 100
+  ): Promise<HTMLElement | undefined> {
     return new Promise((resolve, reject) => {
       let retries = 0;
 
       const checkElement = () => {
+        if (!shouldCreate()) {
+          resolve(undefined);
+          return;
+        }
         const element = document.getElementById(elementId);
         if (element) {
           resolve(element);
@@ -160,13 +169,17 @@ export class ClassicVisualizationService {
     config: GraphConfig,
     tableData: TableData,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    emitter: (config: any) => void
-  ): Promise<HeliumClassicVisualization> {
+    emitter: (config: any) => void,
+    shouldCreate: () => boolean = () => true
+  ): Promise<HeliumClassicVisualization | undefined> {
+    // Wait for DOM element to be available
+    const targetElement = await this.waitForElement(targetElementId, shouldCreate);
+    if (!targetElement || !shouldCreate()) {
+      return undefined;
+    }
+
     // Inject Bootstrap compatibility styles before creating visualization
     this.bootstrapCompatibilityService.injectBootstrapStyles();
-
-    // Wait for DOM element to be available
-    const targetElement = await this.waitForElement(targetElementId);
 
     // Clean up any existing instance for this element
     this.destroyInstance(targetElementId);
@@ -367,9 +380,13 @@ export class ClassicVisualizationService {
     }
   }
 
-  destroyInstance(targetElementId: string, forceCleanBootstrap = false): void {
+  destroyInstance(
+    targetElementId: string,
+    forceCleanBootstrap = false,
+    expectedInstance?: HeliumClassicVisualization
+  ): void {
     const instanceInfo = this.activeInstanceInfos.get(targetElementId);
-    if (!instanceInfo) {
+    if (!instanceInfo || (expectedInstance && instanceInfo.instance !== expectedInstance)) {
       return;
     }
 

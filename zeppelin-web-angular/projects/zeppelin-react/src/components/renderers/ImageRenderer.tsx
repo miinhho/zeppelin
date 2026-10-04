@@ -12,10 +12,14 @@
 
 export interface ImageRendererProps {
   imageData: string;
+  format?: 'png' | 'svg';
 }
 
-export const ImageRenderer = ({ imageData }: ImageRendererProps) => {
-  const imgSrc = `data:image/png;base64,${imageData}`;
+export const ImageRenderer = ({ imageData, format = 'png' }: ImageRendererProps) => {
+  const imgSrc =
+    format === 'svg'
+      ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(imageData)}`
+      : `data:image/png;base64,${imageData}`;
 
   return <img src={imgSrc} alt="Result" style={{ maxWidth: '100%', height: 'auto' }} />;
 };
