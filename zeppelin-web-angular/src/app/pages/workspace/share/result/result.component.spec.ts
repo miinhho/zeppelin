@@ -39,17 +39,32 @@ import {
 } from '@zeppelin/services';
 import { NotebookParagraphResultComponent } from './result.component';
 
-const component = () =>
+const component = (compiler: Partial<RuntimeCompilerService> = {}) =>
   new NotebookParagraphResultComponent(
     {} as Injector,
     {} as ViewContainerRef,
-    { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
-    {} as RuntimeCompilerService,
+    { detectChanges: vi.fn(), markForCheck: vi.fn() } as unknown as ChangeDetectorRef,
+    compiler as RuntimeCompilerService,
     {} as DomSanitizer,
     {} as NgZService,
     {} as HeliumService,
-    {} as ClassicVisualizationService
+    { destroyAllInstances: vi.fn() } as unknown as ClassicVisualizationService
   );
+
+const pendingCompilation = () => {
+  let resolve!: (template: DynamicTemplate) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<DynamicTemplate>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+const flushCompilation = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
 
 describe('finite dataset rendering', () => {
   it('encodes SVG output as an image URL', () => {
@@ -78,6 +93,111 @@ describe('finite dataset rendering', () => {
     result.renderDefaultDisplay();
     expect(renderHTML).not.toHaveBeenCalled();
     expect(renderAngular).not.toHaveBeenCalled();
+    expect(result.frontEndError).toBe('');
+  });
+});
+
+describe('Angular compilation lifecycle', () => {
+  it.each([DatasetType.SVG, DatasetType.NULL])('ignores stale compilation success after %s output', async type => {
+    const pending = pendingCompilation();
+    const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
+    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
+    result.renderDefaultDisplay();
+    result.result = { type, data: '<svg xmlns="http://www.w3.org/2000/svg" />' };
+    result.renderDefaultDisplay();
+
+    pending.resolve({} as DynamicTemplate);
+    await flushCompilation();
+
+    expect(result.angularComponent).toBeNull();
+    expect(result.frontEndError).toBe('');
+  });
+
+  it.each([DatasetType.SVG, DatasetType.NULL])('ignores stale compilation errors after %s output', async type => {
+    const pending = pendingCompilation();
+    const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
+    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
+    result.renderDefaultDisplay();
+    result.result = { type, data: '<svg xmlns="http://www.w3.org/2000/svg" />' };
+    result.renderDefaultDisplay();
+
+    pending.reject(new Error('obsolete compilation'));
+    await flushCompilation();
+
+    expect(result.angularComponent).toBeNull();
+    expect(result.frontEndError).toBe('');
+  });
+
+  it('keeps the latest Angular compilation when an earlier render resolves last', async () => {
+    const previous = pendingCompilation();
+    const current = pendingCompilation();
+    const result = component({
+      createAndCompileTemplate: vi.fn().mockReturnValueOnce(previous.promise).mockReturnValueOnce(current.promise)
+    });
+    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
+    result.renderDefaultDisplay();
+    result.result = { type: DatasetType.ANGULAR, data: '<p>current</p>' };
+    result.renderDefaultDisplay();
+    const template = {} as DynamicTemplate;
+
+    current.resolve(template);
+    await flushCompilation();
+    previous.resolve({} as DynamicTemplate);
+    await flushCompilation();
+
+    expect(result.angularComponent).toBe(template);
+    expect(result.frontEndError).toBe('');
+  });
+
+  it('keeps the latest Angular compilation when an earlier render rejects', async () => {
+    const previous = pendingCompilation();
+    const current = pendingCompilation();
+    const result = component({
+      createAndCompileTemplate: vi.fn().mockReturnValueOnce(previous.promise).mockReturnValueOnce(current.promise)
+    });
+    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
+    result.renderDefaultDisplay();
+    result.result = { type: DatasetType.ANGULAR, data: '<p>current</p>' };
+    result.renderDefaultDisplay();
+    const template = {} as DynamicTemplate;
+
+    current.resolve(template);
+    await flushCompilation();
+    previous.reject(new Error('obsolete compilation'));
+    await flushCompilation();
+
+    expect(result.angularComponent).toBe(template);
+    expect(result.frontEndError).toBe('');
+  });
+
+  it('reports errors from the current Angular compilation', async () => {
+    const pending = pendingCompilation();
+    const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
+    result.result = { type: DatasetType.ANGULAR, data: '<p>current</p>' };
+    result.renderDefaultDisplay();
+
+    pending.reject(new Error('current compilation failed'));
+    await flushCompilation();
+
+    expect(result.angularComponent).toBeNull();
+    expect(result.frontEndError).toBe('current compilation failed');
+  });
+
+  it.each(['success', 'error'])('ignores pending compilation %s after destruction', async outcome => {
+    const pending = pendingCompilation();
+    const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
+    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
+    result.renderDefaultDisplay();
+    result.ngOnDestroy();
+
+    if (outcome === 'success') {
+      pending.resolve({} as DynamicTemplate);
+    } else {
+      pending.reject(new Error('obsolete compilation'));
+    }
+    await flushCompilation();
+
+    expect(result.angularComponent).toBeNull();
     expect(result.frontEndError).toBe('');
   });
 });

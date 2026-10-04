@@ -109,6 +109,8 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
   @ViewChild(CdkPortalOutlet, { static: false }) portalOutlet!: CdkPortalOutlet;
 
   private destroy$ = new Subject<void>();
+  private renderGeneration = 0;
+  private destroyed = false;
   datasetType = DatasetType;
   angularComponent: DynamicTemplate | null = null;
   innerHTML: string | SafeHtml = '';
@@ -331,6 +333,10 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
   }
 
   renderDefaultDisplay() {
+    if (this.destroyed) {
+      return;
+    }
+    this.renderGeneration++;
     this.frontEndError = '';
     switch (this.result.type) {
       case DatasetType.TABLE:
@@ -376,13 +382,20 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
   }
 
   renderAngular(): void {
+    const generation = this.renderGeneration;
     this.runtimeCompilerService
       .createAndCompileTemplate(this.id, this.result.data)
       .then(data => {
+        if (this.destroyed || generation !== this.renderGeneration) {
+          return;
+        }
         this.angularComponent = data;
         this.cdr.markForCheck();
       })
       .catch(error => {
+        if (this.destroyed || generation !== this.renderGeneration) {
+          return;
+        }
         this.angularComponent = null;
         this.frontEndError = error.message;
         this.cdr.markForCheck();
@@ -608,6 +621,8 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.renderGeneration++;
     this.destroyVisualizations();
     this.classicVisualizationService.destroyAllInstances(true);
     this.destroy$.next();
