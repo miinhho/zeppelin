@@ -102,7 +102,7 @@ export class ClassicVisualizationService {
 
   private waitForElement(
     elementId: string,
-    shouldCreate: () => boolean,
+    isCurrentRender: () => boolean,
     maxRetries = 50,
     interval = 100
   ): Promise<HTMLElement | undefined> {
@@ -110,7 +110,7 @@ export class ClassicVisualizationService {
       let retries = 0;
 
       const checkElement = () => {
-        if (!shouldCreate()) {
+        if (!isCurrentRender()) {
           resolve(undefined);
           return;
         }
@@ -170,11 +170,11 @@ export class ClassicVisualizationService {
     tableData: TableData,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     emitter: (config: any) => void,
-    shouldCreate: () => boolean = () => true
+    isCurrentRender: () => boolean
   ): Promise<HeliumClassicVisualization | undefined> {
     // Wait for DOM element to be available
-    const targetElement = await this.waitForElement(targetElementId, shouldCreate);
-    if (!targetElement || !shouldCreate()) {
+    const targetElement = await this.waitForElement(targetElementId, isCurrentRender);
+    if (!targetElement || !isCurrentRender()) {
       return undefined;
     }
 

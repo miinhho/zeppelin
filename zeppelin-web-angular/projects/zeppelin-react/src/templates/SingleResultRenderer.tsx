@@ -48,8 +48,8 @@ export const SingleResultRenderer = ({ result, index, config }: SingleResultRend
     case DatasetType.NETWORK:
       return null;
     default: {
-      const unhandled: never = result.type;
-      return <Alert message={`Unsupported dataset type: ${unhandled}`} type="error" showIcon />;
+      const _unhandled: never = result.type;
+      return null;
     }
   }
 };

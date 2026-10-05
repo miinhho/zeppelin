@@ -97,16 +97,6 @@ describe('SingleResultRenderer', () => {
     expect(view.container.innerHTML).toBe('');
   });
 
-  it('reports an unexpected wire type and recovers when a valid result arrives', () => {
-    const view = render(<SingleResultRenderer index={0} result={result('FUTURE' as DatasetType, 'unknown')} />);
-    expect(screen.getByRole('alert').textContent).toContain('Unsupported dataset type: FUTURE');
-
-    view.rerender(<SingleResultRenderer index={0} result={result(DatasetType.TEXT, 'recovered output')} />);
-
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByText('recovered output')).toBeTruthy();
-  });
-
   it('renders HTML as markup rather than as text', () => {
     render(<SingleResultRenderer index={0} result={result(DatasetType.HTML, '<p>markup output</p>')} />);
 

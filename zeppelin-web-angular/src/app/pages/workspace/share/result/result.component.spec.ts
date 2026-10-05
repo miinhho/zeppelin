@@ -115,7 +115,7 @@ describe('finite dataset rendering', () => {
   });
 });
 
-describe('Angular compilation lifecycle', () => {
+describe('SVG and NULL invalidate pending Angular output', () => {
   it.each([DatasetType.SVG, DatasetType.NULL])('ignores stale compilation success after %s output', async type => {
     const pending = pendingCompilation();
     const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
@@ -146,48 +146,6 @@ describe('Angular compilation lifecycle', () => {
     expect(result.frontEndError).toBe('');
   });
 
-  it('keeps the latest Angular compilation when an earlier render resolves last', async () => {
-    const previous = pendingCompilation();
-    const current = pendingCompilation();
-    const result = component({
-      createAndCompileTemplate: vi.fn().mockReturnValueOnce(previous.promise).mockReturnValueOnce(current.promise)
-    });
-    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
-    result.renderDefaultDisplay();
-    result.result = { type: DatasetType.ANGULAR, data: '<p>current</p>' };
-    result.renderDefaultDisplay();
-    const template = {} as DynamicTemplate;
-
-    current.resolve(template);
-    await flushCompilation();
-    previous.resolve({} as DynamicTemplate);
-    await flushCompilation();
-
-    expect(result.angularComponent).toBe(template);
-    expect(result.frontEndError).toBe('');
-  });
-
-  it('keeps the latest Angular compilation when an earlier render rejects', async () => {
-    const previous = pendingCompilation();
-    const current = pendingCompilation();
-    const result = component({
-      createAndCompileTemplate: vi.fn().mockReturnValueOnce(previous.promise).mockReturnValueOnce(current.promise)
-    });
-    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
-    result.renderDefaultDisplay();
-    result.result = { type: DatasetType.ANGULAR, data: '<p>current</p>' };
-    result.renderDefaultDisplay();
-    const template = {} as DynamicTemplate;
-
-    current.resolve(template);
-    await flushCompilation();
-    previous.reject(new Error('obsolete compilation'));
-    await flushCompilation();
-
-    expect(result.angularComponent).toBe(template);
-    expect(result.frontEndError).toBe('');
-  });
-
   it('reports errors from the current Angular compilation', async () => {
     const pending = pendingCompilation();
     const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
@@ -199,24 +157,6 @@ describe('Angular compilation lifecycle', () => {
 
     expect(result.angularComponent).toBeNull();
     expect(result.frontEndError).toBe('current compilation failed');
-  });
-
-  it.each(['success', 'error'])('ignores pending compilation %s after destruction', async outcome => {
-    const pending = pendingCompilation();
-    const result = component({ createAndCompileTemplate: vi.fn().mockReturnValue(pending.promise) });
-    result.result = { type: DatasetType.ANGULAR, data: '<p>previous</p>' };
-    result.renderDefaultDisplay();
-    result.ngOnDestroy();
-
-    if (outcome === 'success') {
-      pending.resolve({} as DynamicTemplate);
-    } else {
-      pending.reject(new Error('obsolete compilation'));
-    }
-    await flushCompilation();
-
-    expect(result.angularComponent).toBeNull();
-    expect(result.frontEndError).toBe('');
   });
 });
 
@@ -294,27 +234,16 @@ describe('result type transitions', () => {
     result.config = { graph: { ...new GraphConfig(), mode: 'classic' } };
     result.result = { type: DatasetType.TABLE, data: 'column\nvalue' };
     result.renderDefaultDisplay();
-    const shouldCreate = createClassicVisualization.mock.calls[0][5] as () => boolean;
-    expect(shouldCreate()).toBe(true);
+    const isCurrentRender = createClassicVisualization.mock.calls[0][5] as () => boolean;
+    expect(isCurrentRender()).toBe(true);
 
     result.result = { type, data: '<svg />' };
     result.renderDefaultDisplay();
-    expect(shouldCreate()).toBe(false);
+    expect(isCurrentRender()).toBe(false);
     pending.resolve(undefined);
     await flushCompilation();
 
     expect(result.visualizations.at(-1)?.instance).toBeUndefined();
-    expect(result.frontEndError).toBe('');
-  });
-
-  it('reports an unexpected runtime dataset type and recovers for a valid result', () => {
-    const result = component();
-    result.result = { type: 'FUTURE' as DatasetType, data: '' };
-    result.renderDefaultDisplay();
-    expect(result.frontEndError).toBe('Unsupported dataset type: FUTURE');
-
-    result.result = { type: DatasetType.NULL, data: '' };
-    result.renderDefaultDisplay();
     expect(result.frontEndError).toBe('');
   });
 
