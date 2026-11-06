@@ -66,6 +66,10 @@ export class TableVisualizationComponent implements OnInit {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   @ViewChild(NzTableComponent, { static: false }) nzTable!: NzTableComponent<any>;
 
+  get hasAggregations(): boolean {
+    return this.columns.some(col => this.getColOptionOrThrow(col).aggregation !== null);
+  }
+
   exportFile(type: 'csv' | 'xlsx', all = true) {
     const wb = utils.book_new();
     let ws: WorkSheet;

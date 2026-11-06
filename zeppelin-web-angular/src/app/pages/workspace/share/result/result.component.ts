@@ -253,6 +253,8 @@ export class NotebookParagraphResultComponent implements OnInit, AfterViewInit, 
     if (this.result.type === DatasetType.SVG || this.result.type === DatasetType.NULL) {
       this.outputResetVersion++;
       this.angularComponent = null;
+    }
+    if (this.result.type !== DatasetType.TABLE) {
       this.destroyVisualizations();
       if (this.portalOutlet?.hasAttached()) {
         this.portalOutlet.detach();

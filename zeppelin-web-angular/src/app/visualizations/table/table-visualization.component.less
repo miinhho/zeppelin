@@ -12,6 +12,28 @@
 
 @import "theme-mixin";
 
+:host {
+  display: block;
+  min-width: 0;
+}
+
+:host ::ng-deep .ant-table-content {
+  overflow-x: auto;
+}
+
+:host ::ng-deep .ant-table table {
+  table-layout: auto;
+  width: 100%;
+}
+
+:host th.ant-table-cell,
+:host td.ant-table-cell {
+  min-width: 120px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: var(--zeppelin-table-text-align, start);
+}
+
 .th-dropdown {
   .search-bar.ant-menu-item-group {
     padding: 5px 12px;
@@ -30,6 +52,7 @@
 
   .footer-pagination {
     max-width: 100%;
+    min-width: 0;
     margin-left: auto;
     flex-wrap: wrap;
     row-gap: 8px;
@@ -44,6 +67,7 @@
 
   .aggregation-wrap {
     text-align: right;
+    overflow-wrap: anywhere;
     .aggregation-item {
       margin-left: 10px;
     }

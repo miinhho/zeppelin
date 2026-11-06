@@ -39,7 +39,7 @@ const component = (compiler: Partial<RuntimeCompilerService> = {}) =>
     {} as ViewContainerRef,
     { detectChanges: vi.fn(), markForCheck: vi.fn() } as unknown as ChangeDetectorRef,
     compiler as RuntimeCompilerService,
-    {} as DomSanitizer,
+    { bypassSecurityTrustHtml: (html: string) => html } as unknown as DomSanitizer,
     {} as NgZService
   );
 
@@ -242,5 +242,21 @@ describe('built-in visualizations without external bundles', () => {
     expect(result.config!.graph).toBe(graph);
     expect(configChange).toHaveBeenLastCalledWith({ graph });
     expect(result.frontEndError).toBe('');
+  });
+
+  it('releases a chart when output becomes text and builds a fresh chart for later table output', () => {
+    const result = tableResult('lineChart');
+    result.renderDefaultDisplay();
+    const previous = result.getCurrentVisualization().instance as TestVisualization;
+    result.result = { type: DatasetType.TEXT, data: 'Latest text output' };
+    result.renderDefaultDisplay();
+    expect(previous.destroy).toHaveBeenCalledOnce();
+    expect(result.getCurrentVisualization().instance).toBeUndefined();
+    expect(result.plainText).toContain('Latest text output');
+
+    result.result = { type: DatasetType.TABLE, data: 'Month\tRevenue\nFeb\t20' };
+    result.renderDefaultDisplay();
+    expect(result.getCurrentVisualization().instance).not.toBe(previous);
+    expect(result.tableData.rows).toEqual([{ Month: 'Feb', Revenue: '20' }]);
   });
 });

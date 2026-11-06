@@ -42,9 +42,8 @@
 <nz-table
   #table
   nzSize="small"
-  [nzScroll]="{ x: '1300px' }"
   [nzData]="rows"
-  [nzFooter]="aggregatesFooter"
+  [nzFooter]="hasAggregations ? aggregatesFooter : null"
   [nzShowPagination]="false"
   [(nzPageIndex)]="pageIndex"
   [(nzPageSize)]="pageSize"
@@ -52,7 +51,7 @@
   <thead>
     <tr>
       @for (col of columns; track col) {
-        <th nzWidth="200px" nzShowSort nzCustomFilter (nzSortOrderChange)="onSortChange(col, $event)">
+        <th nzShowSort nzCustomFilter (nzSortOrderChange)="onSortChange(col, $event)">
           {{ col }}
           <i
             #dropdown="nzDropdown"

@@ -25,6 +25,7 @@ export abstract class G2VisualizationComponentBase implements OnDestroy {
   abstract container: ElementRef<HTMLDivElement>;
   chart?: G2.Chart | null;
   config?: GraphConfig;
+  private refreshTimer?: ReturnType<typeof setTimeout>;
 
   constructor(public visualization: Visualization) {}
 
@@ -57,17 +58,19 @@ export abstract class G2VisualizationComponentBase implements OnDestroy {
   }
 
   refresh(): void {
-    if (!this.chart) {
+    const chart = this.chart;
+    if (!chart) {
       throw new Error(`Can't find the chart, Please make sure on correct assignment.`);
     }
     this.config = this.visualization.getConfig();
-    this.chart.changeHeight(this.config.height || 400);
-    setTimeout(() => {
-      if (!this.chart) {
-        throw new Error('Can not refresh the chart, Please make sure on correct assignment.');
-      }
-      this.setScale(this.chart);
-      this.chart.forceFit();
+    chart.changeHeight(this.config.height || 400);
+    if (this.refreshTimer !== undefined) {
+      return;
+    }
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = undefined;
+      this.setScale(chart);
+      chart.forceFit();
     });
   }
 
@@ -99,6 +102,10 @@ export abstract class G2VisualizationComponentBase implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.refreshTimer !== undefined) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
     if (this.chart) {
       this.chart.destroy();
       this.chart = null;
