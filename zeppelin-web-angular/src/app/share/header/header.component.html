@@ -37,6 +37,9 @@
           }
         </nz-dropdown-menu>
       </li>
+      <li nz-menu-item [class.ant-menu-item-selected]="isDashboard">
+        <a [routerLink]="['/dashboards']">Dashboards</a>
+      </li>
       <li nz-menu-item routerLinkActive="ant-menu-item-selected">
         <a [routerLink]="['/jobmanager']">Job</a>
       </li>

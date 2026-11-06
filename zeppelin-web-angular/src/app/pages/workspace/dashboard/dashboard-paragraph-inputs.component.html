@@ -1,0 +1,54 @@
+<!--
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+@if (hasParagraphForms) {
+  <section>
+    <h4>Paragraph inputs</h4>
+    <zeppelin-notebook-paragraph-dynamic-forms
+      [formDefs]="paragraphForms"
+      [paramDefs]="paragraphParams"
+      [runOnChange]="false"
+      [compact]="true"
+      [disable]="busy"
+    ></zeppelin-notebook-paragraph-dynamic-forms>
+  </section>
+}
+@if (hasNoteForms) {
+  <section>
+    <h4>Notebook inputs</h4>
+    <zeppelin-notebook-paragraph-dynamic-forms
+      [formDefs]="localNoteForms"
+      [paramDefs]="localNoteParams"
+      [runOnChange]="false"
+      [compact]="true"
+      [disable]="busy"
+    ></zeppelin-notebook-paragraph-dynamic-forms>
+  </section>
+}
+<div class="source-actions">
+  <button nz-button nzType="primary" type="button" [disabled]="busy || cancelling" (click)="run()">Run source</button>
+  @if (busy && runAccepted) {
+    <button nz-button type="button" [nzLoading]="cancelling" [disabled]="cancelling" (click)="cancel()">
+      Cancel run
+    </button>
+  }
+  <span class="source-status" role="status" aria-live="polite">{{ busy && !runAccepted ? 'Starting…' : status }}</span>
+</div>
+@if (error) {
+  <p class="source-error" role="alert">{{ error }}</p>
+}
+@if (sourceError) {
+  <details class="source-error">
+    <summary>Source execution failed</summary>
+    <pre>{{ sourceError }}</pre>
+  </details>
+}

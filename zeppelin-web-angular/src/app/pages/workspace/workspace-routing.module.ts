@@ -28,6 +28,14 @@ const routes: Routes = [
         loadChildren: () => import('@zeppelin/pages/workspace/home/home.module').then(m => m.HomeModule)
       },
       {
+        path: 'dashboards',
+        loadChildren: () => import('./dashboard/dashboard.module').then(m => m.DashboardModule)
+      },
+      {
+        path: 'dashboard',
+        loadChildren: () => import('./dashboard/dashboard.module').then(m => m.DashboardModule)
+      },
+      {
         path: NOTEBOOK_ROUTE_PATH,
         loadChildren: () => import('@zeppelin/pages/workspace/notebook/notebook.module').then(m => m.NotebookModule)
       },

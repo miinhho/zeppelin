@@ -80,6 +80,16 @@
         </button>
       }
       @if (!viewOnly) {
+        <button
+          nz-button
+          nz-tooltip
+          nzTooltipTitle="Create dashboard"
+          [routerLink]="['/dashboard/new', note.id]"
+          [disabled]="revisionView"
+          data-testid="create-dashboard"
+        >
+          <i nz-icon nzType="dashboard"></i>
+        </button>
         <button nz-button nz-tooltip nzTooltipTitle="Clone this note" (click)="cloneNote()" [disabled]="revisionView">
           <i nz-icon nzType="copy" nzTheme="outline"></i>
         </button>

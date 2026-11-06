@@ -10,14 +10,25 @@
  * limitations under the License.
  */
 
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Inject, Input, OnInit } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  Inject,
+  Input,
+  OnInit,
+  inject
+} from '@angular/core';
 import { NodeItem, TRASH_FOLDER_ID_TOKEN } from '@zeppelin/interfaces';
 
 import { NzTreeNode, NzTreeNodeOptions } from 'ng-zorro-antd/tree';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MessageListener, MessageListenersManager } from '@zeppelin/core';
 import { MessageReceiveDataTypeMap, OP } from '@zeppelin/sdk';
 import { MessageService, NoteListService } from '@zeppelin/services';
+import { DashboardService } from '../../pages/workspace/dashboard/dashboard.service';
 import { NoteActionService } from './note-action.service';
 
 @Component({
@@ -33,6 +44,8 @@ export class NodeListComponent extends MessageListenersManager implements OnInit
   searchValue = '';
   nodes: NzTreeNodeOptions[] = [];
   activatedId?: string;
+  dashboardIds = new Set<string>();
+  private readonly destroyRef = inject(DestroyRef);
 
   activeNote(id: string) {
     this.activatedId = id;
@@ -102,6 +115,19 @@ export class NodeListComponent extends MessageListenersManager implements OnInit
       .sort((v1, v2) => this.noteComparator(v1, v2))
       .map(item => ({ ...item, key: item.id }));
     this.cdr.markForCheck();
+    this.dashboardService
+      .list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: dashboards => {
+          this.dashboardIds = new Set(dashboards.map(dashboard => dashboard.id));
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.dashboardIds.clear();
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   getNoteName(note: NodeItem) {
@@ -137,6 +163,7 @@ export class NodeListComponent extends MessageListenersManager implements OnInit
     @Inject(TRASH_FOLDER_ID_TOKEN) public TRASH_FOLDER_ID: string,
     private noteListService: NoteListService,
     private noteActionService: NoteActionService,
+    private dashboardService: DashboardService,
     private cdr: ChangeDetectorRef
   ) {
     super(messageService);

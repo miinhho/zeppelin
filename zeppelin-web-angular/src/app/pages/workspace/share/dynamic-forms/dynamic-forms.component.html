@@ -12,12 +12,20 @@
 
 <div nz-row [nzGutter]="24">
   @for (form of forms; track trackByNameFn($index, form)) {
-    <div class="form-item" nz-col nzSpan="12" nzXl="8" nzLg="8" nzMd="12" nzSm="24">
+    <div
+      class="form-item"
+      nz-col
+      [nzSpan]="compact ? 24 : 12"
+      [nzXl]="compact ? 24 : 8"
+      [nzLg]="compact ? 24 : 8"
+      [nzMd]="compact ? 24 : 12"
+      nzSm="24"
+    >
       <div nz-row>
         @if (form.displayName) {
-          <label class="item-label" nz-col nzSpan="6">{{ form.displayName }}:</label>
+          <label class="item-label" nz-col [nzSpan]="compact ? 24 : 6">{{ form.displayName }}:</label>
         }
-        <div class="control-wrap" nz-col [nzSpan]="form.displayName ? 16 : 24">
+        <div class="control-wrap" nz-col [nzSpan]="compact || !form.displayName ? 24 : 16">
           @switch (canonicalFormType(form.type)) {
             @case (formType.TextBox) {
               <input

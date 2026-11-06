@@ -55,6 +55,7 @@ export class NotebookParagraphDynamicFormsComponent implements OnInit, OnChanges
   @Input() runOnChange?: boolean = false;
   @Input() disable = false;
   @Input() removable = false;
+  @Input() compact = false;
   @Output() readonly formChange = new EventEmitter<void>();
   @Output() readonly formRemove = new EventEmitter<DynamicFormsItem>();
 

@@ -52,6 +52,7 @@ import {
 } from '@zeppelin/services';
 
 import { scrollIntoViewIfNeeded } from '@zeppelin/utility';
+import { DashboardNote } from '../dashboard/dashboard-model';
 import { NotebookParagraphComponent } from './paragraph/paragraph.component';
 import { AssistantSlots } from './assistant/assistant-slots';
 
@@ -95,6 +96,10 @@ export class NotebookComponent extends MessageListenersManager implements OnInit
     if (isNil(note)) {
       this.router.navigate(['/']).then();
     } else {
+      if ((note as DashboardNote).config.documentType === 'dashboard') {
+        this.router.navigate(['/dashboard', note.id], { replaceUrl: true }).then();
+        return;
+      }
       this.removeParagraphFromNgZ();
       this.note = note;
       const { paragraphId } = this.activatedRoute.snapshot.params;

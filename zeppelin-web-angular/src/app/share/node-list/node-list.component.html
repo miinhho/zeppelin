@@ -78,8 +78,8 @@
         @case ('note') {
           <span class="file">
             <a class="name">
-              <i nz-icon nzType="file" nzTheme="outline"></i>
-              <a [routerLink]="['/notebook', node.origin.id]">
+              <i nz-icon [nzType]="dashboardIds.has(node.origin.id) ? 'dashboard' : 'file'" nzTheme="outline"></i>
+              <a [routerLink]="[dashboardIds.has(node.origin.id) ? '/dashboard' : '/notebook', node.origin.id]">
                 {{ node.title }}
               </a>
             </a>
@@ -88,15 +88,17 @@
                 <a nz-tooltip nzTooltipTitle="Rename note">
                   <i nz-icon nzType="edit" (click)="renameNote(node.origin.id, node.origin.path, node.origin.name)"></i>
                 </a>
-                <a nz-tooltip nzTooltipTitle="Clear output">
-                  <i
-                    nz-icon
-                    nzType="fire"
-                    nz-popconfirm
-                    nzPopconfirmTitle="Do you want to clear all output?"
-                    (nzOnConfirm)="paragraphClearAllOutput(node.origin.id)"
-                  ></i>
-                </a>
+                @if (!dashboardIds.has(node.origin.id)) {
+                  <a nz-tooltip nzTooltipTitle="Clear output">
+                    <i
+                      nz-icon
+                      nzType="fire"
+                      nz-popconfirm
+                      nzPopconfirmTitle="Do you want to clear all output?"
+                      (nzOnConfirm)="paragraphClearAllOutput(node.origin.id)"
+                    ></i>
+                  </a>
+                }
                 <a nz-tooltip nzTooltipTitle="Move note to Trash">
                   <i
                     nz-icon

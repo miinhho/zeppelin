@@ -34,6 +34,9 @@ export class HeaderComponent implements OnInit, OnDestroy {
   queryStr: string | null = null;
   classicUiHref: string;
   searchHistory: string[] = [];
+  get isDashboard(): boolean {
+    return this.router.url.startsWith('/dashboard');
+  }
   private static readonly HISTORY_KEY = 'zeppelin.search.history';
   private static readonly MAX_HISTORY = 20;
 
