@@ -32,6 +32,66 @@ If you work with Apache Zeppelin and find a need for an additional REST API, ple
 Notebooks REST API supports the following operations: List, Create, Get, Delete, Clone, Run, Export, Import as detailed in the following tables.
 
 ## Note operations
+
+### Dashboard documents
+
+In the Angular UI, **Create dashboard** converts a notebook's saved paragraph
+results into an initial dashboard layout. The notebook remains the analysis source.
+The dashboard is a separate note in the same folder, with
+`config.documentType` set to `dashboard` and its definition in `config.dashboard`.
+The definition contains `version`, `title`, `sourceNoteId`, `widgets`, and `tabs`;
+widgets reference a source paragraph and output index rather than copying code
+or results.
+
+| Method | Endpoint | Result |
+| --- | --- | --- |
+| POST | `/api/notebook/{sourceNoteId}/dashboard` | Creates a dashboard beside a readable source notebook; returns its ID. |
+| PUT | `/api/notebook/{dashboardId}/dashboard` | Saves a definition; requires dashboard write and source read access. The source cannot be changed. |
+| GET | `/api/notebook/dashboards` | Lists readable dashboard IDs, names, paths, and source IDs. |
+| GET | `/api/notebook/{dashboardId}` | Reads the dashboard note and definition. |
+| DELETE | `/api/notebook/{dashboardId}` | Permanently deletes the dashboard using the existing note-owner permission check; preserves the source notebook. |
+
+The editor keeps the canvas visible beside **Results** and **Layout** tools.
+Results can be added by dragging or using **Add**. Selecting a block opens its
+size and alignment controls. Text and headings are edited directly in the
+sidebar, with live canvas updates and coalesced undo. **Display settings** uses
+a separate preview; **Apply** and **Save** never execute paragraphs.
+The card's **Inputs & run** action is available in view and edit modes and
+exposes existing Dynamic Forms and the explicit **Run source** action.
+**Reload saved results** reads notebook results without executing code.
+
+Each result renderer updates only when its output data or visualization settings
+change. Resizing refreshes plot dimensions without parsing the result again.
+Selection, title and alignment edits, and unchanged saved-result reloads preserve
+existing renderers and table filter, sort, and pagination state.
+
+Widgets retain `width` (1–12 columns) and `height` (pixels). Optional
+`heightMode` is `auto` or `fixed`; omitted modes fit text, headings, dividers,
+and table results to their content, while plots retain fixed sizing.
+Dragging the right edge changes width without disabling content-fit.
+Dragging the bottom edge or corner sets a fixed height; **Fit content** restores
+automatic sizing. Frames and plot canvases resize independently of the source
+notebook's paragraph dimensions. Width, height mode, and alignment survive save
+and reload and participate in dashboard undo/redo.
+
+Optional `textAlign` accepts `left`, `center`, or `right`; `verticalAlign`
+accepts `top`, `center`, or `bottom`. Text and heading blocks default to
+centered text. Table alignment is configurable without changing source results.
+Tables size short columns to their container, wrap long values, and retain
+horizontal scrolling when many columns cannot fit.
+
+`PUT /api/notebook/{noteId}/forms` accepts `{"params": {...}}` and replaces the
+source notebook's note-scoped parameter values. It requires source write access
+and returns the note ID. Paragraph parameters are supplied to the existing
+`POST /api/notebook/job/{noteId}/{paragraphId}` endpoint, which requires run
+permission. Source input values are not stored in the dashboard definition.
+REST form definitions preserve native form type tags, such as `Select`.
+
+The dashboard list provides **Delete** with a confirmation dialog. Cancellation
+leaves the dashboard unchanged. A successful deletion removes its list entry;
+permission or request failures keep the dialog open and show an error. Deleting
+a dashboard does not delete its source notebook or other dashboards using it.
+
 ### List of the notes
   <table class="table-configuration">
     <col width="200">
