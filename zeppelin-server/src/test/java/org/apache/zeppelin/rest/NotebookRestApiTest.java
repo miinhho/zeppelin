@@ -91,6 +91,133 @@ class NotebookRestApiTest extends AbstractTestRestApi {
   }
 
   @Test
+  void testSaveNoteFormsRest() throws IOException {
+    String noteId = notebook.createNote("/dashboard-rest/Inputs", anonymous);
+    Map<String, Object> params = Map.of(
+        "region", "East", "enabled", true, "selected", List.of("x", Map.of("id", 42.0)));
+    try {
+      notebook.processNote(noteId, note -> {
+        note.setNoteParams(Map.of("old", "value"));
+        notebook.saveNote(note, anonymous);
+        return null;
+      });
+      try (CloseableHttpResponse response = httpPut(
+          "/notebook/" + noteId + "/forms", gson.toJson(new ParametersRequest(params)))) {
+        assertThat(response, isAllowed());
+        Map<?, ?> body = gson.fromJson(
+            EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), Map.class);
+        assertEquals(noteId, body.get("body"));
+      }
+      notebook.processNote(noteId, true, note -> {
+        assertEquals(params, note.getNoteParams());
+        return null;
+      });
+      for (String invalid : List.of("[]", "null", "{}", "{\"params\":null}",
+          "{\"params\":[]}", "{\"params\":\"East\"}", "not-json")) {
+        try (CloseableHttpResponse response = httpPut("/notebook/" + noteId + "/forms", invalid)) {
+          assertEquals(400, response.getStatusLine().getStatusCode(), invalid);
+        }
+      }
+      notebook.processNote(noteId, note -> {
+        assertEquals(params, note.getNoteParams());
+        return null;
+      });
+      try (CloseableHttpResponse response = httpPut(
+          "/notebook/" + noteId + "/forms", "{\"params\":{}}")) {
+        assertThat(response, isAllowed());
+      }
+      notebook.processNote(noteId, true, note -> {
+        assertTrue(note.getNoteParams().isEmpty());
+        return null;
+      });
+    } finally {
+      notebook.removeNote(noteId, anonymous);
+    }
+  }
+
+  @Test
+  void testDashboardRestLifecycle() throws IOException {
+    String sourceId = notebook.createNote("/dashboard-rest/Revenue", anonymous);
+    String dashboardId = null;
+    try {
+      Map<String, Object> definition = new HashMap<>();
+      definition.put("version", 1);
+      definition.put("title", "Revenue overview");
+      definition.put("sourceNoteId", "ignored");
+      definition.put("widgets", List.of(Map.of("id", "text", "kind", "text",
+          "text", "Revenue summary", "tab", "Overview", "width", 12, "height", 160)));
+      definition.put("tabs", List.of("Overview"));
+      try (CloseableHttpResponse response = httpPost(
+          "/notebook/" + sourceId + "/dashboard", gson.toJson(definition))) {
+        assertThat(response, isAllowed());
+        Map<?, ?> body = gson.fromJson(
+            EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), Map.class);
+        dashboardId = (String) body.get("body");
+        assertNotNull(dashboardId);
+      }
+      assertEquals(dashboardId, notebook.getNoteIdByPath("/dashboard-rest/Revenue overview"));
+      definition.put("sourceNoteId", sourceId);
+      definition.put("title", "Updated revenue");
+      try (CloseableHttpResponse response = httpPut(
+          "/notebook/" + dashboardId + "/dashboard", gson.toJson(definition))) {
+        assertThat(response, isAllowed());
+        Map<?, ?> body = gson.fromJson(
+            EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), Map.class);
+        assertEquals(dashboardId, body.get("body"));
+      }
+      try (CloseableHttpResponse response = httpGet("/notebook/dashboards")) {
+        assertThat(response, isAllowed());
+        Map<?, ?> body = gson.fromJson(
+            EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), Map.class);
+        List<Map<String, Object>> dashboards = (List<Map<String, Object>>) body.get("body");
+        String savedId = dashboardId;
+        Map<String, Object> dashboard = dashboards.stream()
+            .filter(item -> savedId.equals(item.get("id"))).findFirst().orElseThrow();
+        assertEquals("/dashboard-rest/Updated revenue", dashboard.get("path"));
+        assertEquals("Updated revenue", dashboard.get("name"));
+        assertEquals(sourceId, dashboard.get("sourceNoteId"));
+      }
+      try (CloseableHttpResponse response = httpGet("/notebook/" + dashboardId + "?reload=true")) {
+        assertThat(response, isAllowed());
+        Map<?, ?> body = gson.fromJson(
+            EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), Map.class);
+        Map<?, ?> note = (Map<?, ?>) body.get("body");
+        assertEquals("Updated revenue", note.get("name"));
+        assertEquals("/dashboard-rest/Updated revenue", note.get("path"));
+        assertTrue(((List<?>) note.get("paragraphs")).isEmpty());
+        Map<?, ?> config = (Map<?, ?>) note.get("config");
+        assertEquals("dashboard", config.get("documentType"));
+        assertEquals("Updated revenue", ((Map<?, ?>) config.get("dashboard")).get("title"));
+      }
+      try (CloseableHttpResponse response = httpGet("/notebook")) {
+        assertThat(response, isAllowed());
+        Map<?, ?> body = gson.fromJson(
+            EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8), Map.class);
+        List<Map<String, Object>> notes = (List<Map<String, Object>>) body.get("body");
+        String savedId = dashboardId;
+        assertTrue(notes.stream().anyMatch(note -> savedId.equals(note.get("id"))
+            && "/dashboard-rest/Updated revenue".equals(note.get("path"))));
+        assertTrue(notes.stream().anyMatch(note -> sourceId.equals(note.get("id"))
+            && "/dashboard-rest/Revenue".equals(note.get("path"))));
+      }
+      definition.put("sourceNoteId", dashboardId);
+      try (CloseableHttpResponse response = httpPut(
+          "/notebook/" + dashboardId + "/dashboard", gson.toJson(definition))) {
+        assertEquals(400, response.getStatusLine().getStatusCode());
+      }
+      try (CloseableHttpResponse response = httpPost(
+          "/notebook/" + sourceId + "/dashboard", "[]")) {
+        assertEquals(400, response.getStatusLine().getStatusCode());
+      }
+    } finally {
+      if (dashboardId != null) {
+        notebook.removeNote(dashboardId, anonymous);
+      }
+      notebook.removeNote(sourceId, anonymous);
+    }
+  }
+
+  @Test
   void testGetReloadNote() throws IOException {
     LOGGER.info("Running testGetNote");
     String note1Id = null;

@@ -19,6 +19,7 @@ package org.apache.zeppelin.notebook.repo;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -148,8 +149,10 @@ public class VFSNotebookRepo extends AbstractNotebookRepo {
       throws IOException {
     FileObject noteFile = rootNotebookFileObject.resolveFile(buildNoteFileName(noteId, notePath),
         NameScope.DESCENDENT);
-    String json = IOUtils.toString(noteFile.getContent().getInputStream(),
-        zConf.getString(ConfVars.ZEPPELIN_ENCODING));
+    String json;
+    try (InputStream in = noteFile.getContent().getInputStream()) {
+      json = IOUtils.toString(in, zConf.getString(ConfVars.ZEPPELIN_ENCODING));
+    }
 
     try {
       Note note = noteParser.fromJson(noteId, json);

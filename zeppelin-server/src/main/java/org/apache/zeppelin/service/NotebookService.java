@@ -295,6 +295,220 @@ public class NotebookService {
     return notesInfo;
   }
 
+  public String createDashboard(String sourceNoteId,
+                                Map<String, Object> definition,
+                                ServiceContext context,
+                                ServiceCallback<String> callback) throws IOException {
+    if (!validDashboardDefinition(definition, context, callback)) {
+      return null;
+    }
+    NoteInfo source = dashboardSource(sourceNoteId, context, callback);
+    if (source == null) {
+      return null;
+    }
+    String path = normalizeNotePath(source.getParent() + "/" + definition.get("title"));
+    String dashboardId = notebook.createNote(path,
+        zConf.getString(ZeppelinConfiguration.ConfVars.ZEPPELIN_INTERPRETER_GROUP_DEFAULT),
+        context.getAutheInfo(), false);
+    return notebook.processNote(dashboardId, note -> {
+      Map<String, Object> dashboard = new HashMap<>(definition);
+      dashboard.put("sourceNoteId", sourceNoteId);
+      note.getConfig().put("documentType", "dashboard");
+      note.getConfig().put("dashboard", dashboard);
+      notebook.saveNote(note, context.getAutheInfo());
+      callback.onSuccess(dashboardId, context);
+      return dashboardId;
+    });
+  }
+
+  public String updateDashboard(String dashboardId,
+                                Map<String, Object> definition,
+                                ServiceContext context,
+                                ServiceCallback<String> callback) throws IOException {
+    if (!validDashboardDefinition(definition, context, callback)
+        || !checkPermission(dashboardId, Permission.WRITER, Message.OP.NOTE_UPDATE,
+            context, callback)) {
+      return null;
+    }
+    return notebook.processNote(dashboardId, note -> {
+      if (note == null) {
+        callback.onFailure(new NoteNotFoundException(dashboardId), context);
+        return null;
+      }
+      Map<?, ?> previous = dashboardDefinition(note);
+      if (previous == null || !(previous.get("sourceNoteId") instanceof String)) {
+        callback.onFailure(new BadRequestException("Note is not a dashboard"), context);
+        return null;
+      }
+      String sourceNoteId = (String) previous.get("sourceNoteId");
+      if (!sourceNoteId.equals(definition.get("sourceNoteId"))) {
+        callback.onFailure(new BadRequestException("Dashboard source cannot be changed"), context);
+        return null;
+      }
+      if (dashboardSource(sourceNoteId, context, callback) == null) {
+        return null;
+      }
+      String previousPath = note.getPath();
+      String path = normalizeNotePath(previousPath.substring(0, previousPath.lastIndexOf('/') + 1)
+          + definition.get("title"));
+      boolean renamed = !previousPath.equals(path);
+      if (renamed && !checkPermission(dashboardId, Permission.OWNER, Message.OP.NOTE_RENAME,
+          context, callback)) {
+        return null;
+      }
+      Map<String, Object> previousConfig = note.getConfig();
+      Map<String, Object> config = new HashMap<>(previousConfig);
+      config.put("dashboard", new HashMap<>(definition));
+      note.setConfig(config);
+      try {
+        if (renamed) {
+          // moveNote also saves the renamed note, including its new dashboard definition.
+          notebook.moveNote(dashboardId, path, context.getAutheInfo());
+        } else {
+          notebook.saveNote(note, context.getAutheInfo());
+        }
+      } catch (NotePathAlreadyExistsException e) {
+        note.setConfig(previousConfig);
+        callback.onFailure(e, context);
+        return null;
+      } catch (IOException e) {
+        note.setConfig(previousConfig);
+        try {
+          if (renamed && (!notebook.containsNote(previousPath)
+              || !dashboardId.equals(notebook.getNoteIdByPath(previousPath)))) {
+            notebook.moveNote(dashboardId, previousPath, context.getAutheInfo());
+          }
+          notebook.saveNote(note, context.getAutheInfo());
+        } catch (IOException rollbackFailure) {
+          e.addSuppressed(rollbackFailure);
+        }
+        throw e;
+      }
+      callback.onSuccess(dashboardId, context);
+      return dashboardId;
+    });
+  }
+
+  public List<Map<String, String>> listDashboards(ServiceContext context,
+      ServiceCallback<List<Map<String, String>>> callback) throws IOException {
+    List<Map<String, String>> dashboards = new ArrayList<>();
+    for (NoteInfo info : notebook.getNotesInfo(
+        noteId -> authorizationService.isReader(noteId, context.getUserAndRoles()))) {
+      notebook.processNote(info.getId(), note -> {
+        if (note != null) {
+          Map<?, ?> definition = dashboardDefinition(note);
+          if (definition != null && definition.get("sourceNoteId") instanceof String) {
+            dashboards.add(Map.of("id", note.getId(), "path", note.getPath(),
+                "name", note.getName(), "sourceNoteId", (String) definition.get("sourceNoteId")));
+          }
+        }
+        return null;
+      });
+    }
+    callback.onSuccess(dashboards, context);
+    return dashboards;
+  }
+
+  private NoteInfo dashboardSource(String sourceNoteId, ServiceContext context,
+                                   ServiceCallback<?> callback) throws IOException {
+    return notebook.processNote(sourceNoteId, source -> {
+      if (source == null) {
+        callback.onFailure(new NoteNotFoundException(sourceNoteId), context);
+        return null;
+      }
+      if (!checkPermission(sourceNoteId, Permission.READER, Message.OP.GET_NOTE, context, callback)) {
+        return null;
+      }
+      if ("dashboard".equals(source.getConfig().get("documentType"))) {
+        callback.onFailure(new BadRequestException("A dashboard cannot be a source notebook"), context);
+        return null;
+      }
+      return new NoteInfo(source);
+    });
+  }
+
+  private Map<?, ?> dashboardDefinition(Note note) {
+    Object definition = note.getConfig().get("dashboard");
+    return "dashboard".equals(note.getConfig().get("documentType")) && definition instanceof Map
+        ? (Map<?, ?>) definition : null;
+  }
+
+  private boolean validDashboardDefinition(Map<String, Object> definition, ServiceContext context,
+                                            ServiceCallback<?> callback) throws IOException {
+    if (definition == null || !(definition.get("version") instanceof Number)
+        || ((Number) definition.get("version")).doubleValue() != 1
+        || !(definition.get("title") instanceof String)
+        || !(definition.get("widgets") instanceof List)
+        || !(definition.get("tabs") instanceof List)) {
+      callback.onFailure(new BadRequestException("Invalid dashboard definition"), context);
+      return false;
+    }
+    String title = (String) definition.get("title");
+    try {
+      if (StringUtils.isBlank(title) || title.contains("/") || title.contains("\\")
+          || !("/" + title).equals(normalizeNotePath("/" + title))) {
+        callback.onFailure(new BadRequestException("Dashboard title must be a valid note name"),
+            context);
+        return false;
+      }
+    } catch (IOException e) {
+      callback.onFailure(new BadRequestException(e.getMessage()), context);
+      return false;
+    }
+    for (Object value : (List<?>) definition.get("widgets")) {
+      if (!(value instanceof Map) || !validDashboardWidget((Map<?, ?>) value)) {
+        callback.onFailure(new BadRequestException("Invalid dashboard widget"), context);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private boolean validDashboardWidget(Map<?, ?> widget) {
+    Object kind = widget.get("kind");
+    boolean chart = "chart".equals(kind);
+    boolean text = "text".equals(kind) || "heading".equals(kind);
+    boolean divider = "divider".equals(kind);
+    if (!chart && !text && !divider) {
+      return false;
+    }
+    double minimumHeight = divider ? 24 : text ? 48 : 160;
+    if (!dashboardNumberInRange(widget.get("width"), 1, 12)
+        || !dashboardNumberInRange(widget.get("height"), minimumHeight, 1600)) {
+      return false;
+    }
+    if ((widget.containsKey("heightMode")
+        && !"auto".equals(widget.get("heightMode"))
+        && !"fixed".equals(widget.get("heightMode")))
+        || (widget.containsKey("textAlign")
+        && !"left".equals(widget.get("textAlign"))
+        && !"center".equals(widget.get("textAlign"))
+        && !"right".equals(widget.get("textAlign")))
+        || (widget.containsKey("verticalAlign")
+        && !"top".equals(widget.get("verticalAlign"))
+        && !"center".equals(widget.get("verticalAlign"))
+        && !"bottom".equals(widget.get("verticalAlign")))) {
+      return false;
+    }
+    if (text && !(widget.get("text") instanceof String)) {
+      return false;
+    }
+    return !chart || widget.get("paragraphId") instanceof String
+        && StringUtils.isNotBlank((String) widget.get("paragraphId"))
+        && dashboardNumberInRange(widget.get("outputIndex"), 0, Integer.MAX_VALUE)
+        && ((Number) widget.get("outputIndex")).doubleValue()
+            == ((Number) widget.get("outputIndex")).intValue()
+        && (!widget.containsKey("config") || widget.get("config") instanceof Map);
+  }
+
+  private boolean dashboardNumberInRange(Object value, double minimum, double maximum) {
+    if (!(value instanceof Number)) {
+      return false;
+    }
+    double number = ((Number) value).doubleValue();
+    return Double.isFinite(number) && number >= minimum && number <= maximum;
+  }
+
   public void renameNote(String noteId,
                          String newNotePath,
                          boolean isRelative,
@@ -936,6 +1150,16 @@ public class NotebookService {
       note -> {
         if (note == null) {
           callback.onFailure(new NoteNotFoundException(noteId), context);
+          return null;
+        }
+
+        // The notebook editor must not replace dashboard identity or its source reference.
+        if ("dashboard".equals(note.getConfig().get("documentType"))) {
+          config.put("documentType", "dashboard");
+          config.put("dashboard", note.getConfig().get("dashboard"));
+        } else if ("dashboard".equals(config.get("documentType"))) {
+          callback.onFailure(new BadRequestException("Use the dashboard API to create a dashboard"),
+              context);
           return null;
         }
 

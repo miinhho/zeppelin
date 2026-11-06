@@ -27,10 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +45,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -72,6 +75,7 @@ import org.apache.zeppelin.notebook.repo.NotebookRepo;
 import org.apache.zeppelin.notebook.repo.VFSNotebookRepo;
 import org.apache.zeppelin.notebook.scheduler.QuartzSchedulerService;
 import org.apache.zeppelin.notebook.scheduler.SchedulerService;
+import org.apache.zeppelin.rest.exception.BadRequestException;
 import org.apache.zeppelin.rest.exception.ForbiddenException;
 import org.apache.zeppelin.rest.exception.NoteNotFoundException;
 import org.apache.zeppelin.scheduler.Job.Status;
@@ -174,12 +178,440 @@ class NotebookServiceTest {
   }
 
   @AfterEach
-  void tearDown() {
+  void tearDown() throws IOException {
+    for (NoteInfo note : notebook.getNotesInfo()) {
+      notebook.removeNote(note.getId(), context.getAutheInfo());
+    }
     notebookDir.delete();
     if (confDir != null){
       confDir.delete();
     }
     searchService.close();
+  }
+
+  @Test
+  void testSaveNoteFormsRequiresSourceWriter() throws IOException {
+    String noteId = notebookService.createNote("/Inputs", "test", false, context, callback);
+    Map<String, Object> original = Map.of("region", "East");
+    notebookService.saveNoteForms(noteId, original, context, callback);
+    Set<String> owner = Collections.singleton("owner");
+    authorizationService.setOwners(noteId, owner);
+    authorizationService.setWriters(noteId, owner);
+    authorizationService.setRunners(noteId, Collections.singleton("runner"));
+    authorizationService.setReaders(noteId, Collections.singleton("runner"));
+    ServiceContext runner = new ServiceContext(new AuthenticationInfo("runner"),
+        Collections.singleton("runner"));
+    reset(callback);
+    notebookService.saveNoteForms(noteId, Map.of("region", "West"), runner, callback);
+    verify(callback).onFailure(any(ForbiddenException.class), eq(runner));
+    notebook.processNote(noteId, note -> {
+      assertEquals(original, note.getNoteParams());
+      return null;
+    });
+    ServiceContext writer = new ServiceContext(new AuthenticationInfo("owner"), owner);
+    Map<String, Object> edited = Map.of("region", "West", "enabled", true);
+    reset(callback);
+    notebookService.saveNoteForms(noteId, edited, writer, callback);
+    notebook.processNote(noteId, true, note -> {
+      assertEquals(edited, note.getNoteParams());
+      return null;
+    });
+  }
+
+  @Test
+  void testDashboardPersistsSeparateNoteAndDefinition() throws IOException {
+    String sourceId = notebookService.createNote("/analysis/Revenue", "test", true, context, callback);
+    String original = notebook.processNote(sourceId, note -> {
+      note.getParagraph(0).setText("%test revenue");
+      note.getParagraph(0).setResult(new InterpreterResult(Code.SUCCESS,
+          InterpreterResult.Type.TABLE, "region\trevenue\nEast\t42"));
+      note.getConfig().put("sourceOnly", "unchanged");
+      notebook.saveNote(note, context.getAutheInfo());
+      return noteParser.toJson(note);
+    });
+    Map<String, Object> definition = dashboardDefinition("untrusted-source");
+    String dashboardId = notebookService.createDashboard(sourceId, definition, context, callback);
+    assertNotNull(dashboardId);
+    assertFalse(sourceId.equals(dashboardId));
+    assertThrows(NotePathAlreadyExistsException.class, () -> notebookService.createDashboard(
+        sourceId, definition, context, callback));
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals("/analysis/Revenue dashboard", note.getPath());
+      assertEquals(0, note.getParagraphCount());
+      assertEquals("dashboard", note.getConfig().get("documentType"));
+      assertFalse(note.getConfig().containsKey("sourceOnly"));
+      Map<?, ?> dashboard = (Map<?, ?>) note.getConfig().get("dashboard");
+      assertEquals(sourceId, dashboard.get("sourceNoteId"));
+      assertEquals(definition.get("widgets"), dashboard.get("widgets"));
+      note.getConfig().put("unrelated", "preserved");
+      notebook.saveNote(note, context.getAutheInfo());
+      return null;
+    });
+
+    Map<String, Object> edited = dashboardDefinition(sourceId);
+    edited.put("title", "Edited revenue");
+    edited.put("tabs", List.of("Overview", "Details"));
+    assertEquals(dashboardId, notebookService.updateDashboard(
+        dashboardId, edited, context, callback));
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals("/analysis/Edited revenue", note.getPath());
+      assertEquals("Edited revenue", note.getName());
+      assertEquals("preserved", note.getConfig().get("unrelated"));
+      assertEquals(edited.get("tabs"),
+          ((Map<?, ?>) note.getConfig().get("dashboard")).get("tabs"));
+      assertEquals("Edited revenue", ((Map<?, ?>) note.getConfig().get("dashboard")).get("title"));
+      assertEquals(0, note.getParagraphCount());
+      return null;
+    });
+    notebook.processNote(sourceId, true, note -> {
+      assertEquals(original, noteParser.toJson(note));
+      return null;
+    });
+
+    List<Map<String, String>> dashboards = notebookService.listDashboards(context, callback);
+    assertEquals(List.of(Map.of("id", dashboardId, "path", "/analysis/Edited revenue",
+        "name", "Edited revenue", "sourceNoteId", sourceId)), dashboards);
+    assertFalse(notebook.containsNote("/analysis/Revenue dashboard"));
+    assertEquals(dashboardId, notebook.getNoteIdByPath("/analysis/Edited revenue"));
+    List<NoteInfo> notes = notebookService.listNotesInfo(false, context, callback);
+    assertTrue(notes.stream()
+        .anyMatch(info -> dashboardId.equals(info.getId())
+            && "/analysis/Edited revenue".equals(info.getPath())));
+    assertEquals(dashboardId, notebookService.updateDashboard(
+        dashboardId, edited, context, callback));
+  }
+
+  @Test
+  void testDashboardSourceAndTypeCannotBeReplaced() throws IOException {
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    String otherId = notebookService.createNote("/Other", "test", false, context, callback);
+    String dashboardId = notebookService.createDashboard(
+        sourceId, dashboardDefinition(sourceId), context, callback);
+    reset(callback);
+    assertNull(notebookService.updateDashboard(
+        dashboardId, dashboardDefinition(otherId), context, callback));
+    verify(callback).onFailure(any(BadRequestException.class), eq(context));
+
+    reset(callback);
+    assertNull(notebookService.createDashboard(
+        dashboardId, dashboardDefinition(sourceId), context, callback));
+    verify(callback).onFailure(any(BadRequestException.class), eq(context));
+
+    reset(callback);
+    assertNull(notebookService.updateDashboard(
+        sourceId, dashboardDefinition(sourceId), context, callback));
+    verify(callback).onFailure(any(BadRequestException.class), eq(context));
+
+    Map<String, Object> notebookConfig = new HashMap<>();
+    notebookConfig.put("documentType", "notebook");
+    notebookConfig.put("dashboard", dashboardDefinition(otherId));
+    notebookService.updateNote(dashboardId, "Revenue dashboard", notebookConfig, context, callback);
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals("dashboard", note.getConfig().get("documentType"));
+      assertEquals(sourceId, ((Map<?, ?>) note.getConfig().get("dashboard")).get("sourceNoteId"));
+      return null;
+    });
+  }
+
+  @Test
+  void testDashboardAuthorizationAndReadableListing() throws IOException {
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    String dashboardId = notebookService.createDashboard(
+        sourceId, dashboardDefinition(sourceId), context, callback);
+    ServiceContext stranger = new ServiceContext(new AuthenticationInfo("stranger"),
+        Collections.singleton("stranger"));
+    Set<String> owner = Collections.singleton("owner");
+    authorizationService.setOwners(sourceId, owner);
+    authorizationService.setWriters(sourceId, owner);
+    authorizationService.setRunners(sourceId, owner);
+    authorizationService.setReaders(sourceId, owner);
+
+    reset(callback);
+    assertNull(notebookService.createDashboard(
+        sourceId, dashboardDefinition(sourceId), stranger, callback));
+    verify(callback).onFailure(any(ForbiddenException.class), eq(stranger));
+    assertEquals(2, notebook.getNotesInfo().size());
+
+    reset(callback);
+    assertNull(notebookService.updateDashboard(
+        dashboardId, dashboardDefinition(sourceId), stranger, callback));
+    verify(callback).onFailure(any(ForbiddenException.class), eq(stranger));
+
+    authorizationService.setOwners(dashboardId, owner);
+    authorizationService.setWriters(dashboardId, owner);
+    authorizationService.setRunners(dashboardId, owner);
+    authorizationService.setReaders(dashboardId, owner);
+    assertTrue(notebookService.listDashboards(stranger, callback).isEmpty());
+
+    authorizationService.setReaders(sourceId, Collections.singleton("stranger"));
+    reset(callback);
+    assertNull(notebookService.updateDashboard(
+        dashboardId, dashboardDefinition(sourceId), stranger, callback));
+    verify(callback).onFailure(any(ForbiddenException.class), eq(stranger));
+    authorizationService.setReaders(dashboardId, Collections.singleton("stranger"));
+    List<Map<String, String>> visible = notebookService.listDashboards(stranger, callback);
+    assertEquals(dashboardId, visible.get(0).get("id"));
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals("Revenue dashboard",
+          ((Map<?, ?>) note.getConfig().get("dashboard")).get("title"));
+      return null;
+    });
+  }
+
+  @Test
+  void testDashboardRejectsMissingSourceAndInvalidDefinition() throws IOException {
+    reset(callback);
+    assertNull(notebookService.createDashboard(
+        "missing", dashboardDefinition("missing"), context, callback));
+    verify(callback).onFailure(any(NoteNotFoundException.class), eq(context));
+    assertTrue(notebook.getNotesInfo().isEmpty());
+
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    reset(callback);
+    assertNull(notebookService.createDashboard(sourceId, null, context, callback));
+    verify(callback).onFailure(any(BadRequestException.class), eq(context));
+    assertEquals(1, notebook.getNotesInfo().size());
+    String dashboardId = notebookService.createDashboard(
+        sourceId, dashboardDefinition(sourceId), context, callback);
+    notebook.removeNote(sourceId, context.getAutheInfo());
+    reset(callback);
+    assertNull(notebookService.updateDashboard(
+        dashboardId, dashboardDefinition(sourceId), context, callback));
+    verify(callback).onFailure(any(NoteNotFoundException.class), eq(context));
+    List<Map<String, String>> visible = notebookService.listDashboards(context, callback);
+    assertEquals(dashboardId, visible.get(0).get("id"));
+  }
+
+  @Test
+  void testDashboardRenameConflictPreservesIdentityAndDefinition() throws IOException {
+    String sourceId = notebookService.createNote("/analysis/Revenue", "test", false, context, callback);
+    String otherId = notebookService.createNote("/analysis/Taken", "test", false, context, callback);
+    Map<String, Object> original = dashboardDefinition(sourceId);
+    String dashboardId = notebookService.createDashboard(sourceId, original, context, callback);
+    Map<String, Object> edited = dashboardDefinition(sourceId);
+    edited.put("title", "Taken");
+    edited.put("tabs", List.of("Changed"));
+    reset(callback);
+    assertNull(notebookService.updateDashboard(dashboardId, edited, context, callback));
+    verify(callback).onFailure(any(NotePathAlreadyExistsException.class), eq(context));
+    verify(callback, never()).onSuccess(any(), any());
+    notebook.processNote(dashboardId, note -> {
+      assertEquals(original, note.getConfig().get("dashboard"));
+      assertEquals("/analysis/Revenue dashboard", note.getPath());
+      return null;
+    });
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals(original, note.getConfig().get("dashboard"));
+      assertEquals("Revenue dashboard", note.getName());
+      return null;
+    });
+    assertEquals(otherId, notebook.getNoteIdByPath("/analysis/Taken"));
+    assertEquals(sourceId, notebook.getNoteIdByPath("/analysis/Revenue"));
+    assertEquals(List.of(Map.of("id", dashboardId, "path", "/analysis/Revenue dashboard",
+        "name", "Revenue dashboard", "sourceNoteId", sourceId)),
+        notebookService.listDashboards(context, callback));
+  }
+
+  @Test
+  void testDashboardWriterCanSaveLayoutButOnlyOwnerCanRename() throws IOException {
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    String dashboardId = notebookService.createDashboard(
+        sourceId, dashboardDefinition(sourceId), context, callback);
+    ServiceContext writer = new ServiceContext(new AuthenticationInfo("writer"),
+        Collections.singleton("writer"));
+    ServiceContext owner = new ServiceContext(new AuthenticationInfo("owner"),
+        Collections.singleton("owner"));
+    authorizationService.setOwners(dashboardId, Collections.singleton("owner"));
+    authorizationService.setWriters(dashboardId, Collections.singleton("writer"));
+    Map<String, Object> edited = dashboardDefinition(sourceId);
+    edited.put("tabs", List.of("Details"));
+    assertEquals(dashboardId, notebookService.updateDashboard(dashboardId, edited, writer, callback));
+    edited.put("title", "Renamed");
+    reset(callback);
+    assertNull(notebookService.updateDashboard(dashboardId, edited, writer, callback));
+    verify(callback).onFailure(any(ForbiddenException.class), eq(writer));
+    verify(callback, never()).onSuccess(any(), any());
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals("/Revenue dashboard", note.getPath());
+      assertEquals("Revenue dashboard",
+          ((Map<?, ?>) note.getConfig().get("dashboard")).get("title"));
+      assertEquals(List.of("Details"), ((Map<?, ?>) note.getConfig().get("dashboard")).get("tabs"));
+      return null;
+    });
+    assertEquals(dashboardId, notebookService.updateDashboard(dashboardId, edited, owner, callback));
+    assertEquals(dashboardId, notebook.getNoteIdByPath("/Renamed"));
+    assertEquals(sourceId, notebook.getNoteIdByPath("/Revenue"));
+  }
+
+  @Test
+  void testDashboardRenameFailureRollsBackSavedIdentityAndDefinition() throws IOException {
+    String sourceId = notebookService.createNote("/analysis/Revenue", "test", false, context, callback);
+    Map<String, Object> original = dashboardDefinition(sourceId);
+    String dashboardId = notebookService.createDashboard(sourceId, original, context, callback);
+    Notebook failingNotebook = spy(notebook);
+    doAnswer(invocation -> {
+      invocation.callRealMethod();
+      throw new IOException("Failed after rename");
+    }).doCallRealMethod().when(failingNotebook).moveNote(
+        eq(dashboardId), any(String.class), any(AuthenticationInfo.class));
+    NotebookService failingService = new NotebookService(
+        failingNotebook, authorizationService, zConf, mock(SchedulerService.class));
+    Map<String, Object> edited = dashboardDefinition(sourceId);
+    edited.put("title", "Renamed");
+    reset(callback);
+    IOException failure = assertThrows(IOException.class, () ->
+        failingService.updateDashboard(dashboardId, edited, context, callback));
+    assertEquals("Failed after rename", failure.getMessage());
+    verify(callback, never()).onSuccess(any(), any());
+    assertFalse(notebook.containsNote("/analysis/Renamed"));
+    assertEquals(dashboardId, notebook.getNoteIdByPath("/analysis/Revenue dashboard"));
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals("/analysis/Revenue dashboard", note.getPath());
+      assertEquals(original, note.getConfig().get("dashboard"));
+      return null;
+    });
+  }
+
+  @Test
+  void testDashboardSupportsVersionOneContentWidgetKinds() throws IOException {
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    Map<String, Object> definition = dashboardDefinition(sourceId);
+    List<?> widgets = List.of(((List<?>) definition.get("widgets")).get(0),
+        Map.of("kind", "text", "text", "Summary", "width", 12.0, "height", 48.0,
+            "heightMode", "auto", "textAlign", "center", "verticalAlign", "center"),
+        Map.of("kind", "heading", "text", "Revenue", "width", 12.0, "height", 48.0,
+            "heightMode", "fixed", "textAlign", "right", "verticalAlign", "bottom"),
+        Map.of("kind", "text", "text", "Details", "width", 6.0, "height", 48.0,
+            "textAlign", "left", "verticalAlign", "top"),
+        Map.of("kind", "divider", "width", 12.0, "height", 24.0));
+    definition.put("widgets", widgets);
+    String dashboardId = notebookService.createDashboard(sourceId, definition, context, callback);
+    assertNotNull(dashboardId);
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals(definition, note.getConfig().get("dashboard"));
+      return null;
+    });
+    assertEquals(dashboardId, notebookService.updateDashboard(
+        dashboardId, definition, context, callback));
+    notebook.processNote(dashboardId, true, note -> {
+      Map<?, ?> saved = (Map<?, ?>) note.getConfig().get("dashboard");
+      assertEquals(1, ((Number) saved.get("version")).intValue());
+      assertEquals(definition, saved);
+      return null;
+    });
+  }
+
+  @Test
+  void testDashboardRejectsInvalidWidgetContentAndDimensions() throws IOException {
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    Map<String, Object> original = dashboardDefinition(sourceId);
+    String dashboardId = notebookService.createDashboard(sourceId, original, context, callback);
+    List<Map<String, Object>> invalidWidgets = List.of(
+        Map.of("kind", "heading", "width", 12, "height", 80),
+        Map.of("kind", "text", "width", 12, "height", 160),
+        Map.of("kind", "text", "text", 42, "width", 12, "height", 160),
+        Map.of("kind", "text", "text", "Summary", "width", 12, "height", 47),
+        Map.of("kind", "heading", "text", "Heading", "width", 12, "height", 47),
+        Map.of("kind", "divider", "width", 12, "height", 23),
+        Map.of("kind", "divider", "width", 12, "height", 1601),
+        Map.of("kind", "divider", "width", 0, "height", 48),
+        Map.of("kind", "divider", "width", 13, "height", 48),
+        Map.of("kind", "divider", "width", Double.NaN, "height", 48),
+        Map.of("kind", "divider", "width", 12, "height", Double.POSITIVE_INFINITY),
+        Map.of("kind", "unknown", "width", 12, "height", 160),
+        Map.of("kind", "chart", "width", 6, "height", 300),
+        Map.of("kind", "chart", "paragraphId", "p", "outputIndex", 0,
+            "width", 6, "height", 159),
+        Map.of("kind", "chart", "paragraphId", "p", "outputIndex", -1,
+            "width", 6, "height", 300),
+        Map.of("kind", "chart", "paragraphId", "p", "outputIndex", 0.5,
+            "width", 6, "height", 300));
+    for (Map<String, Object> widget : invalidWidgets) {
+      Map<String, Object> definition = dashboardDefinition(sourceId);
+      definition.put("widgets", List.of(widget));
+      reset(callback);
+      assertNull(notebookService.updateDashboard(dashboardId, definition, context, callback));
+      verify(callback).onFailure(any(BadRequestException.class), eq(context));
+      verify(callback, never()).onSuccess(any(), any());
+      reset(callback);
+      assertNull(notebookService.createDashboard(sourceId, definition, context, callback));
+      verify(callback).onFailure(any(BadRequestException.class), eq(context));
+      verify(callback, never()).onSuccess(any(), any());
+    }
+    assertEquals(2, notebook.getNotesInfo().size());
+    notebook.processNote(dashboardId, true, note -> {
+      assertEquals(original, note.getConfig().get("dashboard"));
+      return null;
+    });
+  }
+
+  @Test
+  void testDashboardRejectsInvalidPresentationWithoutChangingSavedDefinition() throws IOException {
+    String sourceId = notebookService.createNote("/Revenue", "test", false, context, callback);
+    Map<String, Object> original = dashboardDefinition(sourceId);
+    original.put("widgets", List.of(Map.of(
+        "kind", "text", "text", "Summary", "width", 12.0, "height", 48.0,
+        "heightMode", "auto", "textAlign", "center", "verticalAlign", "center")));
+    String dashboardId = notebookService.createDashboard(sourceId, original, context, callback);
+    assertNotNull(dashboardId);
+    for (String field : List.of("heightMode", "textAlign", "verticalAlign")) {
+      for (Object invalid : new Object[] {"invalid", "", 1, null}) {
+        Map<String, Object> widget = new HashMap<>(Map.of(
+            "kind", "text", "text", "Changed", "width", 12, "height", 48));
+        widget.put(field, invalid);
+        Map<String, Object> definition = dashboardDefinition(sourceId);
+        definition.put("widgets", List.of(widget));
+        definition.put("title", "Changed");
+        reset(callback);
+        assertNull(notebookService.updateDashboard(dashboardId, definition, context, callback));
+        verify(callback).onFailure(any(BadRequestException.class), eq(context));
+        verify(callback, never()).onSuccess(any(), any());
+        notebook.processNote(dashboardId, true, note -> {
+          assertEquals(original, note.getConfig().get("dashboard"));
+          assertEquals("/Revenue dashboard", note.getPath());
+          return null;
+        });
+        reset(callback);
+        assertNull(notebookService.createDashboard(sourceId, definition, context, callback));
+        verify(callback).onFailure(any(BadRequestException.class), eq(context));
+        verify(callback, never()).onSuccess(any(), any());
+      }
+    }
+    assertEquals(2, notebook.getNotesInfo().size());
+  }
+
+  @Test
+  void testDashboardRejectsTitlesThatWouldChangeFolderOrCanonicalName() throws IOException {
+    String sourceId = notebookService.createNote("/analysis/Revenue", "test", false, context, callback);
+    String dashboardId = notebookService.createDashboard(
+        sourceId, dashboardDefinition(sourceId), context, callback);
+    for (String title : List.of("", " ", "other/Revenue", "other\\Revenue", "../Revenue",
+        "Revenue\nsummary", "Revenue+summary", "%2FRevenue")) {
+      Map<String, Object> definition = dashboardDefinition(sourceId);
+      definition.put("title", title);
+      reset(callback);
+      assertNull(notebookService.updateDashboard(dashboardId, definition, context, callback));
+      verify(callback).onFailure(any(BadRequestException.class), eq(context));
+      verify(callback, never()).onSuccess(any(), any());
+      reset(callback);
+      assertNull(notebookService.createDashboard(sourceId, definition, context, callback));
+      verify(callback).onFailure(any(BadRequestException.class), eq(context));
+    }
+    assertEquals(2, notebook.getNotesInfo().size());
+    assertEquals(dashboardId, notebook.getNoteIdByPath("/analysis/Revenue dashboard"));
+    assertEquals(sourceId, notebook.getNoteIdByPath("/analysis/Revenue"));
+  }
+
+  private Map<String, Object> dashboardDefinition(String sourceNoteId) {
+    Map<String, Object> definition = new HashMap<>();
+    definition.put("version", 1.0);
+    definition.put("title", "Revenue dashboard");
+    definition.put("sourceNoteId", sourceNoteId);
+    definition.put("widgets", List.of(Map.of("id", "chart", "kind", "chart",
+        "paragraphId", "paragraph", "outputIndex", 0.0, "width", 6.0, "height", 300.0,
+        "config", Map.of("graph", Map.of("mode", "barChart")), "tab", "Overview")));
+    definition.put("tabs", List.of("Overview"));
+    return definition;
   }
 
   @Test

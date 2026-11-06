@@ -17,6 +17,9 @@
 
 package org.apache.zeppelin.rest;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -328,6 +331,77 @@ public class NotebookRestApi extends AbstractRestApi {
     List<NoteInfo> notesInfo = notebookService.listNotesInfo(false, getServiceContext(),
             new RestServiceCallback<>());
     return new JsonResponse<>(Status.OK, "", notesInfo).build();
+  }
+
+  @GET
+  @Path("dashboards")
+  @ZeppelinApi
+  public Response getDashboards() throws IOException {
+    return new JsonResponse<>(Status.OK, "", notebookService.listDashboards(
+        getServiceContext(), new RestServiceCallback<>())).build();
+  }
+
+  @POST
+  @Path("{sourceNoteId}/dashboard")
+  @ZeppelinApi
+  public Response createDashboard(@PathParam("sourceNoteId") String sourceNoteId, String message)
+      throws IOException {
+    String dashboardId = notebookService.createDashboard(sourceNoteId, dashboardRequest(message),
+        getServiceContext(), new RestServiceCallback<String>() {
+          @Override
+          public void onSuccess(String id, ServiceContext context) {
+            notebookServer.broadcastNoteList(context.getAutheInfo(), context.getUserAndRoles());
+          }
+        });
+    return new JsonResponse<>(Status.OK, "", dashboardId).build();
+  }
+
+  @PUT
+  @Path("{dashboardId}/dashboard")
+  @ZeppelinApi
+  public Response updateDashboard(@PathParam("dashboardId") String dashboardId, String message)
+      throws IOException {
+    String savedId = notebookService.updateDashboard(dashboardId, dashboardRequest(message),
+        getServiceContext(), new RestServiceCallback<String>() {
+          @Override
+          public void onSuccess(String id, ServiceContext context) {
+            notebookServer.broadcastNoteList(context.getAutheInfo(), context.getUserAndRoles());
+          }
+        });
+    return new JsonResponse<>(Status.OK, "", savedId).build();
+  }
+
+  private Map<String, Object> dashboardRequest(String message) {
+    try {
+      return GSON.fromJson(message, new TypeToken<Map<String, Object>>() { }.getType());
+    } catch (JsonParseException e) {
+      throw new BadRequestException("Invalid dashboard definition");
+    }
+  }
+
+  @PUT
+  @Path("{noteId}/forms")
+  @ZeppelinApi
+  public Response saveNoteForms(@PathParam("noteId") String noteId, String message)
+      throws IOException {
+    ParametersRequest request;
+    try {
+      JsonObject body = GSON.fromJson(message, JsonObject.class);
+      if (body == null || !body.has("params") || !body.get("params").isJsonObject()) {
+        throw new BadRequestException("params must be an object");
+      }
+      request = GSON.fromJson(body, ParametersRequest.class);
+    } catch (JsonParseException e) {
+      throw new BadRequestException("Invalid note form parameters");
+    }
+    notebookService.saveNoteForms(noteId, request.getParams(), getServiceContext(),
+        new RestServiceCallback<Note>() {
+          @Override
+          public void onSuccess(Note note, ServiceContext context) throws IOException {
+            notebookServer.broadcastNote(note);
+          }
+        });
+    return new JsonResponse<>(Status.OK, "", noteId).build();
   }
 
   /**

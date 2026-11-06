@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response.ResponseBuilder;
 
+import org.apache.zeppelin.display.Input;
+
 /**
  * Json response builder.
  *
@@ -98,6 +100,7 @@ public class JsonResponse<T> {
       gsonBuilder.setPrettyPrinting();
     }
     gsonBuilder.setExclusionStrategies(new JsonExclusionStrategy());
+    gsonBuilder.registerTypeAdapterFactory(Input.TypeAdapterFactory);
     Gson gson = gsonBuilder.create();
     return gson.toJson(this);
   }
