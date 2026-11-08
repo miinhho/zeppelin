@@ -83,6 +83,7 @@ module.exports = (_env, argv) => {
           './ParagraphFooter': './src/components/paragraph/ParagraphFooter',
           './ConfigurationTable': './src/pages/ConfigurationTable',
           './NotebookRepoList': './src/pages/NotebookRepoList',
+          './Dashboard': './src/pages/Dashboard',
           './AssistantWorkspace': './src/pages/AssistantWorkspace'
         }
       }),

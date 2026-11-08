@@ -12,6 +12,8 @@
 
 export { AssistantWorkspace, mount as mountAssistantWorkspace } from './pages/AssistantWorkspace';
 export { ConfigurationTable, mount as mountConfigurationTable } from './pages/ConfigurationTable';
+export { Dashboard, mount as mountDashboard } from './pages/Dashboard';
+export type { DashboardReactProps, DashboardMountHandle } from './pages/Dashboard';
 export { NotebookRepoList, mount as mountNotebookRepoList } from './pages/NotebookRepoList';
 export { PublishedParagraph, mount } from './pages/PublishedParagraph';
 export { ParagraphFooter, mount as mountParagraphFooter } from './components/paragraph/ParagraphFooter';

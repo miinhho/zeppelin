@@ -11,3 +11,5 @@
  */
 
 export * from './PublishedParagraph';
+export { Dashboard, mount as mountDashboard } from './Dashboard';
+export type { DashboardReactProps, DashboardMountHandle } from './Dashboard';

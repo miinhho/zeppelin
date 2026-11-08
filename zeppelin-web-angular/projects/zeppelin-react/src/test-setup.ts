@@ -11,7 +11,7 @@
  */
 
 import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 
 // Tests drive React roots directly (the Module Federation mount contract),
 // so opt into act()-aware scheduling globally.
@@ -38,11 +38,13 @@ if (typeof window.matchMedia !== 'function') {
 }
 
 // jsdom has no layout observer; antd 6 requires the browser API when mounting.
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe = vi.fn();
-    unobserve = vi.fn();
-    disconnect = vi.fn();
-  }
-);
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    }
+  );
+});
