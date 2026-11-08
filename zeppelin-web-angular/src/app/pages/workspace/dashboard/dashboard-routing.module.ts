@@ -13,24 +13,20 @@
 import { NgModule } from '@angular/core';
 import { CanDeactivateFn, RouterModule, Routes } from '@angular/router';
 
-import { DashboardListComponent } from './dashboard-list.component';
-import { DashboardComponent } from './dashboard.component';
+import { DashboardHostComponent } from './dashboard-host.component';
 
-const canLeaveDashboard: CanDeactivateFn<DashboardComponent> = (component, _route, current, next) => {
-  const sameDocument = current.url.split('?')[0] === next?.url.split('?')[0];
-  const nextEditing = new URLSearchParams(next?.url.split('?')[1] || '').get('edit') === 'true';
-  return sameDocument && component.editing === nextEditing ? true : component.canLeave();
-};
+const canLeaveDashboard: CanDeactivateFn<DashboardHostComponent> = (component, _route, current, next) =>
+  component.canLeave(current.url, next?.url);
 
 const routes: Routes = [
-  { path: '', component: DashboardListComponent, pathMatch: 'full' },
+  { path: '', component: DashboardHostComponent, pathMatch: 'full', canDeactivate: [canLeaveDashboard] },
   {
     path: 'new/:sourceNoteId',
-    component: DashboardComponent,
+    component: DashboardHostComponent,
     canDeactivate: [canLeaveDashboard],
     runGuardsAndResolvers: 'always'
   },
-  { path: ':id', component: DashboardComponent, canDeactivate: [canLeaveDashboard], runGuardsAndResolvers: 'always' }
+  { path: ':id', component: DashboardHostComponent, canDeactivate: [canLeaveDashboard], runGuardsAndResolvers: 'always' }
 ];
 
 @NgModule({

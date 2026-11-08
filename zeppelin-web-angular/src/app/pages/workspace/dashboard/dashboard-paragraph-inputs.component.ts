@@ -21,14 +21,13 @@ import {
   OnDestroy,
   Output
 } from '@angular/core';
-import { DynamicFormParams, DynamicForms, ParagraphItem, ParagraphStates } from '@zeppelin/sdk';
+import { DashboardSourceNote, DynamicFormParams, DynamicForms, ParagraphItem, ParagraphStates } from '@zeppelin/sdk';
 import { isEqual } from 'lodash';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { Observable, of, Subscription } from 'rxjs';
 import { concatMap, finalize, tap } from 'rxjs/operators';
 
 import { WorkspaceShareModule } from '../share/share.module';
-import { SourceNote } from './dashboard-model';
 import { DashboardParagraphService, paragraphIsRunning } from './dashboard-paragraph.service';
 
 @Component({
@@ -44,7 +43,7 @@ export class DashboardParagraphInputsComponent implements OnChanges, OnDestroy {
   @Input() paragraph!: ParagraphItem;
   @Input() noteForms: DynamicForms = {};
   @Input() noteParams: DynamicFormParams = {};
-  @Output() readonly sourceChange = new EventEmitter<SourceNote>();
+  @Output() readonly sourceChange = new EventEmitter<DashboardSourceNote>();
   @Output() readonly busyChange = new EventEmitter<boolean>();
 
   paragraphForms: DynamicForms = {};
@@ -157,7 +156,7 @@ export class DashboardParagraphInputsComponent implements OnChanges, OnDestroy {
     this.setBusy(false);
   }
 
-  private observe(source: Observable<SourceNote>): void {
+  private observe(source: Observable<DashboardSourceNote>): void {
     this.operation.add(
       source
         .pipe(
@@ -179,7 +178,7 @@ export class DashboardParagraphInputsComponent implements OnChanges, OnDestroy {
     );
   }
 
-  private acceptSource(source: SourceNote): void {
+  private acceptSource(source: DashboardSourceNote): void {
     const paragraph = source.paragraphs.find(item => item.id === this.activeParagraphId);
     if (paragraph) {
       this.updateStatus(paragraph);

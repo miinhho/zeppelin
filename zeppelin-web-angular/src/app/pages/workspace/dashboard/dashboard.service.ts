@@ -12,12 +12,13 @@
 
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { NotesInfoItem } from '@zeppelin/sdk';
+import {
+  createDashboardDefinition, DashboardDefinition, DashboardNote, DashboardSourceNote, DashboardSummary, NotesInfoItem
+} from '@zeppelin/sdk';
 import { Observable, forkJoin, map, switchMap } from 'rxjs';
 
 import { BaseRest } from '../../../services/base-rest';
 import { BaseUrlService } from '../../../services/base-url.service';
-import { createDashboard, DashboardDefinition, DashboardNote, DashboardSummary, SourceNote } from './dashboard-model';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardService extends BaseRest {
@@ -28,12 +29,12 @@ export class DashboardService extends BaseRest {
     super(baseUrlService);
   }
 
-  create(source: SourceNote): Observable<string> {
+  create(source: DashboardSourceNote): Observable<string> {
     return this.http.get<NotesInfoItem[]>(this.restUrl`/notebook`).pipe(
       switchMap(notes =>
         this.http.post<string>(
           this.restUrl`/notebook/${encodeURIComponent(source.id)}/dashboard`,
-          createDashboard(source, notes.map(note => note.path))
+          createDashboardDefinition(source, notes.map(note => note.path))
         )
       )
     );
@@ -43,8 +44,8 @@ export class DashboardService extends BaseRest {
     return this.http.get<DashboardNote>(this.restUrl`/notebook/${encodeURIComponent(id)}`);
   }
 
-  source(id: string): Observable<SourceNote> {
-    return this.http.get<SourceNote>(this.restUrl`/notebook/${encodeURIComponent(id)}`);
+  source(id: string): Observable<DashboardSourceNote> {
+    return this.http.get<DashboardSourceNote>(this.restUrl`/notebook/${encodeURIComponent(id)}`);
   }
 
   save(id: string, definition: DashboardDefinition): Observable<string> {

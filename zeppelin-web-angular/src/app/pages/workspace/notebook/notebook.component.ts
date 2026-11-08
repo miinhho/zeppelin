@@ -31,6 +31,7 @@ import { NzResizeEvent } from 'ng-zorro-antd/resizable';
 import { MessageEnvelopeListener, MessageListener, MessageListenersManager } from '@zeppelin/core';
 import { Permissions } from '@zeppelin/interfaces';
 import {
+  DashboardNote,
   DynamicFormParams,
   InterpreterBindingItem,
   MessageReceiveDataTypeMap,
@@ -52,7 +53,6 @@ import {
 } from '@zeppelin/services';
 
 import { scrollIntoViewIfNeeded } from '@zeppelin/utility';
-import { DashboardNote } from '../dashboard/dashboard-model';
 import { NotebookParagraphComponent } from './paragraph/paragraph.component';
 import { AssistantSlots } from './assistant/assistant-slots';
 

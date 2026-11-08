@@ -12,13 +12,12 @@
 
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { DynamicFormParams, ParagraphItem, ParagraphStates } from '@zeppelin/sdk';
+import { DashboardSourceNote, DynamicFormParams, ParagraphItem, ParagraphStates } from '@zeppelin/sdk';
 import { Observable, timer } from 'rxjs';
 import { exhaustMap, map, takeWhile } from 'rxjs/operators';
 
 import { BaseRest } from '../../../services/base-rest';
 import { BaseUrlService } from '../../../services/base-url.service';
-import { SourceNote } from './dashboard-model';
 
 export function paragraphIsRunning(paragraph: ParagraphItem): boolean {
   return paragraph.status === ParagraphStates.PENDING || paragraph.status === ParagraphStates.RUNNING;
@@ -50,11 +49,11 @@ export class DashboardParagraphService extends BaseRest {
     );
   }
 
-  source(noteId: string): Observable<SourceNote> {
-    return this.http.get<SourceNote>(this.restUrl`/notebook/${encodeURIComponent(noteId)}`);
+  source(noteId: string): Observable<DashboardSourceNote> {
+    return this.http.get<DashboardSourceNote>(this.restUrl`/notebook/${encodeURIComponent(noteId)}`);
   }
 
-  watch(noteId: string, paragraphId: string): Observable<SourceNote> {
+  watch(noteId: string, paragraphId: string): Observable<DashboardSourceNote> {
     return timer(0, 1000).pipe(
       exhaustMap(() => this.source(noteId)),
       map(source => {

@@ -10,35 +10,37 @@
  * limitations under the License.
  */
 
-import { DragDropModule } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NzButtonModule } from 'ng-zorro-antd/button';
-import { NzDropDownModule } from 'ng-zorro-antd/dropdown';
-import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzModalModule } from 'ng-zorro-antd/modal';
-import { NzSpinModule } from 'ng-zorro-antd/spin';
 
+import { ShareModule } from '@zeppelin/share';
 import { WorkspaceShareModule } from '../share/share.module';
-import { DashboardListComponent } from './dashboard-list.component';
+import { DashboardHostComponent } from './dashboard-host.component';
+import { DashboardInputsDialogComponent } from './dashboard-inputs-dialog.component';
+import { DashboardNativeResultComponent } from './dashboard-native-result.component';
 import { DashboardParagraphInputsComponent } from './dashboard-paragraph-inputs.component';
 import { DashboardResultDirective } from './dashboard-result.directive';
 import { DashboardRoutingModule } from './dashboard-routing.module';
-import { DashboardComponent } from './dashboard.component';
+import { DashboardSettingsDialogComponent } from './dashboard-settings-dialog.component';
 
 @NgModule({
-  declarations: [DashboardComponent, DashboardListComponent, DashboardResultDirective],
+  declarations: [
+    DashboardHostComponent,
+    DashboardNativeResultComponent,
+    DashboardSettingsDialogComponent,
+    DashboardInputsDialogComponent,
+    DashboardResultDirective
+  ],
   imports: [
     CommonModule,
     FormsModule,
-    DragDropModule,
+    ShareModule,
     NzButtonModule,
-    NzDropDownModule,
-    NzIconModule,
     NzInputModule,
-    NzSpinModule,
     NzModalModule,
     DashboardParagraphInputsComponent,
     WorkspaceShareModule,
