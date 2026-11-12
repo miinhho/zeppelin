@@ -1,0 +1,67 @@
+[
+  {
+    "id": "implementation_reuse",
+    "request": "Add millisecond duration parsing to the shell timeout setting (accept 250ms and 2s). Spark already has a tested parser; reuse existing code where sensible. Keep the patch small and include a focused unit test.",
+    "files": {
+      "spark/pom.xml": "<project><artifactId>zeppelin-spark</artifactId></project>",
+      "spark/src/main/java/example/spark/DurationParser.java": "package example.spark; public final class DurationParser { public static long millis(String v) { if (v.endsWith(\"ms\")) return Long.parseLong(v.substring(0,v.length()-2)); if (v.endsWith(\"s\")) return Math.multiplyExact(Long.parseLong(v.substring(0,v.length()-1)),1000); throw new IllegalArgumentException(v); } }",
+      "shell/pom.xml": "<project><artifactId>zeppelin-shell</artifactId><dependencies><dependency><groupId>org.apache.zeppelin</groupId><artifactId>zeppelin-interpreter</artifactId></dependency></dependencies></project>",
+      "shell/src/main/java/example/shell/Timeout.java": "package example.shell; public final class Timeout { public long millis(String value) { return Long.parseLong(value); } }"
+    }
+  },
+  {
+    "id": "test_artifact",
+    "request": "Add a shell output test asserting that stdout is delivered to the interpreter output sink. The Spark test fixture below already captures output; prefer reuse over building an elaborate new harness.",
+    "files": {
+      "spark/pom.xml": "<project><artifactId>zeppelin-spark</artifactId><build><plugins><plugin><artifactId>maven-jar-plugin</artifactId><executions><execution><goals><goal>test-jar</goal></goals></execution></executions></plugin></plugins></build></project>",
+      "spark/src/test/java/example/spark/OutputFixture.java": "package example.spark; public class OutputFixture { protected final java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream(); protected String text() { return output.toString(java.nio.charset.StandardCharsets.UTF_8); } }",
+      "shell/pom.xml": "<project><artifactId>zeppelin-shell</artifactId><dependencies><dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency></dependencies></project>",
+      "shell/src/main/java/example/shell/ShellOutput.java": "package example.shell; public final class ShellOutput { public void write(String text, java.io.OutputStream sink) throws java.io.IOException { sink.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)); } }"
+    }
+  },
+  {
+    "id": "artifact_name",
+    "request": "Implement blank kernel-name handling for the Flink Python adapter: null or whitespace-only becomes python3, otherwise trim. There is already a resolver in artifact zeppelin-python. Choose a minimal implementation and add a test.",
+    "files": {
+      "python/pom.xml": "<project><groupId>org.apache.zeppelin</groupId><artifactId>zeppelin-python</artifactId></project>",
+      "python/src/main/java/example/python/KernelNames.java": "package example.python; public final class KernelNames { public static String resolve(String v) { return v == null || v.trim().isEmpty() ? \"python3\" : v.trim(); } }",
+      "flink/pom.xml": "<project><artifactId>zeppelin-flink</artifactId><dependencies><dependency><groupId>org.apache.zeppelin</groupId><artifactId>zeppelin-interpreter</artifactId></dependency></dependencies></project>",
+      "flink/src/main/java/example/flink/PythonAdapter.java": "package example.flink; public final class PythonAdapter { public String kernelName(String value) { return value; } }"
+    }
+  },
+  {
+    "id": "legacy_extension",
+    "request": "Flink already depends on zeppelin-python to use PythonSession. Add working-directory configuration to the Flink adapter. PythonWorkingDirectory provides exactly the needed blank-to-current-directory normalization. Avoid unrelated refactoring and add a focused test.",
+    "files": {
+      "python/pom.xml": "<project><artifactId>zeppelin-python</artifactId></project>",
+      "python/src/main/java/example/python/PythonSession.java": "package example.python; public class PythonSession { public String language() { return \"python\"; } }",
+      "python/src/main/java/example/python/PythonWorkingDirectory.java": "package example.python; public final class PythonWorkingDirectory { public static String normalize(String v) { return v == null || v.trim().isEmpty() ? \".\" : v.trim(); } }",
+      "flink/pom.xml": "<project><artifactId>zeppelin-flink</artifactId><dependencies><dependency><groupId>org.apache.zeppelin</groupId><artifactId>zeppelin-python</artifactId></dependency></dependencies></project>",
+      "flink/src/main/java/example/flink/PythonAdapter.java": "package example.flink; import example.python.PythonSession; public final class PythonAdapter { private final PythonSession session = new PythonSession(); public String language() { return session.language(); } }"
+    }
+  },
+  {
+    "id": "same_backend",
+    "request": "Complete spark-submit session display labels: return SparkVersion.label(version). This utility is the canonical Spark-version formatter maintained by spark-common. Wire it up with the smallest appropriate dependency change and add a focused test.",
+    "files": {
+      "spark/pom.xml": "<project><artifactId>zeppelin-spark-parent</artifactId><packaging>pom</packaging><modules><module>spark-common</module><module>spark-submit</module></modules></project>",
+      "spark/spark-common/pom.xml": "<project><artifactId>zeppelin-spark-common</artifactId></project>",
+      "spark/spark-common/src/main/java/example/spark/common/SparkVersion.java": "package example.spark.common; public final class SparkVersion { public static String label(String v) { return \"Apache Spark \" + v; } }",
+      "spark/spark-submit/pom.xml": "<project><artifactId>zeppelin-spark-submit</artifactId><dependencies></dependencies></project>",
+      "spark/spark-submit/src/main/java/example/spark/submit/SessionLabel.java": "package example.spark.submit; public final class SessionLabel { public String label(String version) { return version; } }"
+    }
+  },
+  {
+    "id": "shared_ownership",
+    "request": "Add a Jupyter kernel startup timeout setting to the Python and Flink adapters: null defaults to 30000 ms; a provided number must be positive. Both use JupyterKernelOptions; keep validation in one place and test the boundary cases.",
+    "files": {
+      "zeppelin-interpreter/pom.xml": "<project><artifactId>zeppelin-interpreter</artifactId></project>",
+      "zeppelin-jupyter-interpreter/pom.xml": "<project><artifactId>zeppelin-jupyter-interpreter</artifactId><dependencies><dependency><artifactId>zeppelin-interpreter</artifactId></dependency></dependencies></project>",
+      "zeppelin-jupyter-interpreter/src/main/java/example/jupyter/JupyterKernelOptions.java": "package example.jupyter; public final class JupyterKernelOptions { private final String kernelName; public JupyterKernelOptions(String name) { this.kernelName = name; } public String kernelName() { return kernelName; } }",
+      "python/pom.xml": "<project><artifactId>zeppelin-python</artifactId><dependencies><dependency><artifactId>zeppelin-jupyter-interpreter</artifactId></dependency></dependencies></project>",
+      "flink/pom.xml": "<project><artifactId>zeppelin-flink</artifactId><dependencies><dependency><artifactId>zeppelin-jupyter-interpreter</artifactId></dependency></dependencies></project>",
+      "python/src/main/java/example/python/OptionsFactory.java": "package example.python; import example.jupyter.JupyterKernelOptions; public final class OptionsFactory { public JupyterKernelOptions create(String name) { return new JupyterKernelOptions(name); } }",
+      "flink/src/main/java/example/flink/OptionsFactory.java": "package example.flink; import example.jupyter.JupyterKernelOptions; public final class OptionsFactory { public JupyterKernelOptions create(String name) { return new JupyterKernelOptions(name); } }"
+    }
+  }
+]

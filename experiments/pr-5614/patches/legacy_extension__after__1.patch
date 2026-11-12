@@ -1,0 +1,99 @@
+--- a/flink/src/main/java/example/flink/PythonAdapter.java
++++ b/flink/src/main/java/example/flink/PythonAdapter.java
+@@ -1 +1,44 @@
+-package example.flink; import example.python.PythonSession; public final class PythonAdapter { private final PythonSession session = new PythonSession(); public String language() { return session.language(); } }
+\ No newline at end of file
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one or more
++ * contributor license agreements.  See the NOTICE file distributed with
++ * this work for additional information regarding copyright ownership.
++ * The ASF licenses this file to You under the Apache License, Version 2.0
++ * (the "License"); you may not use this file except in compliance with
++ * the License.  You may obtain a copy of the License at
++ *
++ *    http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package example.flink;
++
++import example.python.PythonSession;
++
++public final class PythonAdapter {
++  private final PythonSession session = new PythonSession();
++  private final String workingDirectory;
++
++  public PythonAdapter() {
++    this(null);
++  }
++
++  public PythonAdapter(String workingDirectory) {
++    this.workingDirectory =
++        workingDirectory == null || workingDirectory.trim().isEmpty()
++            ? "."
++            : workingDirectory.trim();
++  }
++
++  public String language() {
++    return session.language();
++  }
++
++  public String workingDirectory() {
++    return workingDirectory;
++  }
++}
+--- /dev/null
++++ b/flink/src/test/java/example/flink/PythonAdapterTest.java
+@@ -0,0 +1,47 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one or more
++ * contributor license agreements.  See the NOTICE file distributed with
++ * this work for additional information regarding copyright ownership.
++ * The ASF licenses this file to You under the Apache License, Version 2.0
++ * (the "License"); you may not use this file except in compliance with
++ * the License.  You may obtain a copy of the License at
++ *
++ *    http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package example.flink;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++import org.junit.jupiter.api.Test;
++
++class PythonAdapterTest {
++  @Test
++  void defaultsToCurrentDirectory() {
++    PythonAdapter adapter = new PythonAdapter();
++
++    assertEquals(".", adapter.workingDirectory());
++    assertEquals("python", adapter.language());
++  }
++
++  @Test
++  void normalizesNullAndBlankDirectoriesToCurrentDirectory() {
++    assertEquals(".", new PythonAdapter(null).workingDirectory());
++    assertEquals(".", new PythonAdapter("").workingDirectory());
++    assertEquals(".", new PythonAdapter(" \t\n ").workingDirectory());
++  }
++
++  @Test
++  void trimsConfiguredDirectoryWithoutChangingLanguage() {
++    PythonAdapter adapter = new PythonAdapter("  notebooks/my project \t");
++
++    assertEquals("notebooks/my project", adapter.workingDirectory());
++    assertEquals("python", adapter.language());
++  }
++}

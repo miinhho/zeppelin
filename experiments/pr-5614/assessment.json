@@ -1,0 +1,39 @@
+{
+  "pr": "https://github.com/apache/zeppelin/pull/5614",
+  "before": "95b0ca5d2f130ea864fb3e081b90b7a8b2144f0a",
+  "after": "22db67608aa9bab58d0e71ad7fd2b298f2b0de63",
+  "model_alias": "default; resolved model/version unavailable",
+  "method": "Six synthetic patch-generation tasks, twice per condition; only repository document snapshots differed. Dependency and ownership boundaries inspected; no Java compilation/tests or real repository agent run.",
+  "results": {
+    "implementation_reuse": {
+      "before": 2,
+      "after": 2
+    },
+    "test_artifact": {
+      "before": 0,
+      "after": 2
+    },
+    "artifact_name": {
+      "before": 2,
+      "after": 2
+    },
+    "legacy_extension": {
+      "before": 0,
+      "after": 2
+    },
+    "same_backend": {
+      "before": 2,
+      "after": 2
+    },
+    "shared_ownership": {
+      "before": 2,
+      "after": 2
+    }
+  },
+  "runs_per_condition_per_task": 2,
+  "limitations": [
+    "Small exploratory sample, not a reliability estimate.",
+    "Both documents supplied directly; discovery not evaluated.",
+    "Synthetic classes and simplified POMs/layouts, not production patches."
+  ]
+}
