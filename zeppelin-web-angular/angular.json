@@ -197,6 +197,51 @@
         }
       }
     },
+    "echarts-proof": {
+      "root": "e2e/echarts-proof",
+      "sourceRoot": "e2e/echarts-proof",
+      "projectType": "application",
+      "prefix": "zeppelin",
+      "architect": {
+        "build": {
+          "builder": "@angular-builders/custom-webpack:browser",
+          "options": {
+            "outputPath": "dist/echarts-proof",
+            "index": "e2e/echarts-proof/index.html",
+            "main": "e2e/echarts-proof/main.ts",
+            "polyfills": ["zone.js"],
+            "tsConfig": "e2e/echarts-proof/tsconfig.json",
+            "customWebpackConfig": {
+              "path": "./webpack.config.js"
+            },
+            "assets": [{ "glob": "**/*", "input": "src/assets", "output": "assets" }],
+            "styles": [
+              "src/styles/theme/light/antd-light.less",
+              "src/styles.less",
+              "./node_modules/monaco-editor/min/vs/editor/editor.main.css"
+            ],
+            "stylePreprocessorOptions": {
+              "includePaths": ["src/styles/theme", "src/styles/theme/dark", "src/styles/theme/light"]
+            },
+            "scripts": [],
+            "optimization": false,
+            "extractLicenses": false,
+            "namedChunks": true,
+            "sourceMap": true,
+            "aot": true,
+            "buildOptimizer": false
+          }
+        },
+        "serve": {
+          "builder": "@angular-builders/custom-webpack:dev-server",
+          "options": {
+            "buildTarget": "echarts-proof:build",
+            "host": "localhost",
+            "port": 4310
+          }
+        }
+      }
+    },
     "zeppelin-visualization": {
       "projectType": "library",
       "root": "projects/zeppelin-visualization",

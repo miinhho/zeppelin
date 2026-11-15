@@ -15,8 +15,9 @@
  */
 
 export * from './data-set';
-export * from './g2-visualization-base';
-export * from './g2-visualization-component-base';
+export * from './echarts-option';
+export * from './echarts-visualization-base';
+export * from './echarts-visualization-component-base';
 export * from './pivot-transformation';
 export * from './table-data';
 export * from './table-transformation';

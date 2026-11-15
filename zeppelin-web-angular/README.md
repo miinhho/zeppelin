@@ -124,7 +124,7 @@ Zeppelin-WEB-Angular is using Angular as the main Framework, before developing w
 
 In addition:
 
-- We use [G2](https://github.com/antvis/g2) [(MIT)](https://github.com/antvis/g2/blob/master/LICENSE) visualization
+- We use [Apache ECharts](https://echarts.apache.org/) [(Apache 2.0)](https://github.com/apache/echarts/blob/master/LICENSE) for shared paragraph charts; see the [renderer PoC](projects/zeppelin-visualization/README.md#shared-paragraph-echarts-proof).
 - We use [Lodash](https://lodash.com/) [(MIT)](https://github.com/lodash/lodash/blob/master/LICENSE) to process complex data
 - We use [Monaco Editor](https://github.com/microsoft/monaco-editor) [(MIT)](https://github.com/microsoft/monaco-editor/blob/master/LICENSE.md) to make code editor
 - We use [vanilla-extract](https://vanilla-extract.style/) [(MIT)](https://github.com/vanilla-extract-css/vanilla-extract/blob/master/LICENSE) for typed styles in the React Assistant

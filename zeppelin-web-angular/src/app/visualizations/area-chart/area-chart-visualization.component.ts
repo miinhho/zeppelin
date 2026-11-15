@@ -20,14 +20,11 @@ import {
   OnInit,
   ViewChild
 } from '@angular/core';
-import * as G2 from '@antv/g2';
 
 import { GraphConfig, VisualizationStackedAreaChart } from '@zeppelin/sdk';
-import { G2VisualizationComponentBase, Visualization, VISUALIZATION } from '@zeppelin/visualization';
+import { EChartsVisualizationComponentBase, Visualization, VISUALIZATION } from '@zeppelin/visualization';
 
 import { VisualizationPivotSettingComponent } from '../common/pivot-setting/pivot-setting.component';
-import { calcTickCount } from '../common/util/calc-tick-count';
-import { setChartXAxis } from '../common/util/set-x-axis';
 import { VisualizationXAxisSettingComponent } from '../common/x-axis-setting/x-axis-setting.component';
 
 @Component({
@@ -37,7 +34,10 @@ import { VisualizationXAxisSettingComponent } from '../common/x-axis-setting/x-a
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: false
 })
-export class AreaChartVisualizationComponent extends G2VisualizationComponentBase implements OnInit, AfterViewInit {
+export class AreaChartVisualizationComponent
+  extends EChartsVisualizationComponentBase
+  implements OnInit, AfterViewInit
+{
   @ViewChild('container', { static: false }) container!: ElementRef<HTMLDivElement>;
   @ViewChild(VisualizationXAxisSettingComponent, { static: false })
   xAxisSettingComponent!: VisualizationXAxisSettingComponent;
@@ -80,31 +80,5 @@ export class AreaChartVisualizationComponent extends G2VisualizationComponentBas
 
   ngAfterViewInit(): void {
     this.render();
-  }
-
-  setScale(chart: G2.Chart) {
-    const key = this.getKey();
-    const tickCount = calcTickCount(this.container.nativeElement);
-    chart.scale(key, {
-      tickCount,
-      type: 'cat'
-    });
-  }
-
-  renderBefore(_config: GraphConfig, chart: G2.Chart) {
-    const key = this.getKey();
-    this.setScale(chart);
-    if (this.style === 'stack') {
-      // area:stack
-      chart.areaStack().position(`${key}*__value__`).color('__key__');
-    } else if (this.style === 'stream') {
-      // area:stream
-      chart.area().position(`${key}*__value__`).adjust(['stack', 'symmetric']).color('__key__');
-    } else {
-      // area:percent
-      chart.areaStack().position(`${key}*__percent__`).color('__key__');
-    }
-
-    setChartXAxis(this.visualization, 'stackedAreaChart', chart, key);
   }
 }

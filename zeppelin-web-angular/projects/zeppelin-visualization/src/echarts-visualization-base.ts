@@ -12,15 +12,15 @@
 
 import { GraphConfig } from '@zeppelin/sdk';
 
-import { G2VisualizationComponentBase } from './g2-visualization-component-base';
+import { EChartsVisualizationComponentBase } from './echarts-visualization-component-base';
 import { PivotTransformation } from './pivot-transformation';
 import { Transformation } from './transformation';
 import { Visualization } from './visualization';
 import { VisualizationComponentPortal } from './visualization-component-portal';
 
-export abstract class G2VisualizationBase extends Visualization<G2VisualizationComponentBase> {
+export abstract class EChartsVisualizationBase extends Visualization<EChartsVisualizationComponentBase> {
   pivot = new PivotTransformation(this.getConfig());
-  abstract componentPortal: VisualizationComponentPortal<G2VisualizationBase, G2VisualizationComponentBase>;
+  abstract componentPortal: VisualizationComponentPortal<EChartsVisualizationBase, EChartsVisualizationComponentBase>;
 
   constructor(config: GraphConfig) {
     super(config);

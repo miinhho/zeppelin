@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "ignoreDeprecations": "5.0",
+    "outDir": "../../out-tsc/echarts-proof",
+    "types": ["mathjax"],
+    "paths": {
+      "@zeppelin/*": ["./src/app/*", "./src/environments/*"],
+      "@zeppelin/visualization": ["./projects/zeppelin-visualization/src/public-api.ts"],
+      "@zeppelin/visualization/*": ["./projects/zeppelin-visualization/src/*"],
+      "@zeppelin/notebook-core": ["./projects/zeppelin-notebook-core/src/public-api.ts"],
+      "@zeppelin/sdk": ["./projects/zeppelin-sdk/src/public-api.ts"],
+      "@zeppelin/sdk/*": ["./projects/zeppelin-sdk/src/*"]
+    }
+  },
+  "files": ["main.ts"],
+  "angularCompilerOptions": {
+    "strictInjectionParameters": true,
+    "strictTemplates": true
+  }
+}

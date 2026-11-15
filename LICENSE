@@ -221,7 +221,6 @@ The text of each license is also included at licenses/LICENSE-[project]-[version
     (The MIT License) jekyll-bootstrap 0.3.0 (https://github.com/plusjade/jekyll-bootstrap) - https://github.com/plusjade/jekyll-bootstrap
     (The MIT License) jekyll 1.3.0 (http://jekyllrb.com/) - https://github.com/jekyll/jekyll/blob/v1.3.0/LICENSE
     (The MIT License) ngInfiniteScroll 1.3.4 (https://github.com/sroze/ngInfiniteScroll) - https://github.com/sroze/ngInfiniteScroll/blob/master/LICENSE
-    (The MIT License) @antv/G2 3.5 (https://github.com/antvis/g2) - https://github.com/antvis/g2/blob/master/LICENSE
     (The MIT License) Lodash (https://lodash.com) - https://github.com/lodash/lodash/blob/master/LICENSE
     (The MIT License) Monaco Editor (https://github.com/microsoft/monaco-editor) - https://github.com/microsoft/monaco-editor/blob/master/LICENSE.md
     (The MIT License) jQuery 1.10.2 (https://jquery.com/) - https://github.com/jquery/jquery/blob/main/LICENSE.txt
@@ -243,6 +242,7 @@ The following components are provided under the Apache License. See project link
 The text of each license is also included at licenses/LICENSE-[project]-[version].txt.
 
     (Apache 2.0) Bootstrap v3.0.2 (http://getbootstrap.com/) - https://github.com/twbs/bootstrap/blob/v3.0.2/LICENSE
+    (Apache 2.0) Apache ECharts 6.1.0 (https://echarts.apache.org/) - https://github.com/apache/echarts/blob/6.1.0/LICENSE
     (Apache 2.0) Software under ./bigquery/*  was developed at Google (http://www.google.com/). Licensed under the Apache v2.0 License.
     (Apache 2.0) Roboto Font (https://github.com/google/roboto/)
     (Apache 2.0) Gson extra (https://github.com/DanySK/gson-extras)
@@ -263,6 +263,10 @@ The following components are provided under the BSD 3-Clause license.  See file 
   (BSD 3 Clause) diff.js (https://github.com/kpdecker/jsdiff)
 
   (BSD 3-Clause) Google Auth Library for Java (https://github.com/google/google-auth-library-java)
+  (BSD 3-Clause) zrender 6.1.0 (https://github.com/ecomfe/zrender)
+    (see licenses/LICENSE-zrender-6.1.0)
+  (BSD 3-Clause) d3.js portions bundled with Apache ECharts
+    (see licenses/LICENSE-echarts-d3)
 
 ========================================================================
 BSD 2-Clause licenses
