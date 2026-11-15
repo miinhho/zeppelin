@@ -20,15 +20,11 @@ import {
   OnInit,
   ViewChild
 } from '@angular/core';
-import * as G2 from '@antv/g2';
 import { GraphConfig } from '@zeppelin/sdk';
 
-import { get } from 'lodash';
-
-import { G2VisualizationComponentBase, Visualization, VISUALIZATION } from '@zeppelin/visualization';
+import { EChartsVisualizationComponentBase, Visualization, VISUALIZATION } from '@zeppelin/visualization';
 
 import { VisualizationScatterSettingComponent } from '../common/scatter-setting/scatter-setting.component';
-import { calcTickCount } from '../common/util/calc-tick-count';
 
 @Component({
   selector: 'zeppelin-scatter-chart-visualization',
@@ -37,7 +33,10 @@ import { calcTickCount } from '../common/util/calc-tick-count';
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: false
 })
-export class ScatterChartVisualizationComponent extends G2VisualizationComponentBase implements OnInit, AfterViewInit {
+export class ScatterChartVisualizationComponent
+  extends EChartsVisualizationComponentBase
+  implements OnInit, AfterViewInit
+{
   @ViewChild('container', { static: false }) container!: ElementRef<HTMLDivElement>;
   @ViewChild(VisualizationScatterSettingComponent, { static: false })
   scatterSettingComponent!: VisualizationScatterSettingComponent;
@@ -52,41 +51,6 @@ export class ScatterChartVisualizationComponent extends G2VisualizationComponent
   refreshSetting(_config: GraphConfig) {
     this.scatterSettingComponent.init();
     this.cdr.markForCheck();
-  }
-
-  setScale(chart: G2.Chart) {
-    const key = this.getKey();
-    const tickCount = calcTickCount(this.container.nativeElement);
-    chart.scale(key, {
-      tickCount,
-      type: 'cat'
-    });
-  }
-
-  renderBefore(config: GraphConfig, chart: G2.Chart) {
-    const key = this.getKey();
-    const size = get(config.setting, 'scatterChart.size.name');
-    this.setScale(chart);
-    chart.tooltip({
-      crosshairs: {
-        type: 'cross'
-      }
-    });
-    chart.legend('__value__', false);
-    // point
-    const geom = chart
-      .point()
-      .position(`${key}*__value__`)
-      .color('__key__')
-      // .adjust('jitter')
-      .opacity(0.65)
-      .shape('circle');
-
-    if (size) {
-      geom.size(size);
-      chart.legend(size, false);
-      geom.tooltip('__key__*__value__', (name: string, value: number) => ({ name, value: String(value) }));
-    }
   }
 
   ngOnInit() {}

@@ -19,10 +19,9 @@ import {
   OnInit,
   ViewChild
 } from '@angular/core';
-import * as G2 from '@antv/g2';
 import { GraphConfig } from '@zeppelin/sdk';
 
-import { G2VisualizationComponentBase, Visualization, VISUALIZATION } from '@zeppelin/visualization';
+import { EChartsVisualizationComponentBase, Visualization, VISUALIZATION } from '@zeppelin/visualization';
 
 import { VisualizationPivotSettingComponent } from '../common/pivot-setting/pivot-setting.component';
 
@@ -33,7 +32,7 @@ import { VisualizationPivotSettingComponent } from '../common/pivot-setting/pivo
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: false
 })
-export class PieChartVisualizationComponent extends G2VisualizationComponentBase implements OnInit, AfterViewInit {
+export class PieChartVisualizationComponent extends EChartsVisualizationComponentBase implements OnInit, AfterViewInit {
   @ViewChild('container', { static: false }) container!: ElementRef<HTMLDivElement>;
   @ViewChild(VisualizationPivotSettingComponent, { static: false })
   pivotSettingComponent!: VisualizationPivotSettingComponent;
@@ -46,29 +45,6 @@ export class PieChartVisualizationComponent extends G2VisualizationComponentBase
 
   refreshSetting(_config: GraphConfig) {
     this.pivotSettingComponent.init();
-  }
-
-  setScale(_chart: G2.Chart) {
-    // Noop
-  }
-
-  renderBefore(_config: GraphConfig, chart: G2.Chart) {
-    chart.tooltip({
-      showTitle: false
-    });
-    chart.coord('theta', {
-      radius: 0.75
-    });
-    chart
-      .intervalStack()
-      .position('__value__')
-      .color('__key__')
-      .style({
-        lineWidth: 1,
-        stroke: '#fff'
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .tooltip('__key__*__value__', (name: any, value: any) => ({ name, value }));
   }
 
   ngAfterViewInit() {

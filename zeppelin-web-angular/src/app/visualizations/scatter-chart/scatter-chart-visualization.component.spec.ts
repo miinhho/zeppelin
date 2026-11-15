@@ -11,8 +11,8 @@
  */
 
 import { ChangeDetectorRef, ElementRef } from '@angular/core';
-import * as G2 from '@antv/g2';
-import { GraphConfig } from '@zeppelin/sdk';
+import type { ECharts } from 'echarts/core';
+import { GraphConfig, VisualizationLineChart } from '@zeppelin/sdk';
 import { PivotTransformation, TableData, Visualization } from '@zeppelin/visualization';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,22 +27,38 @@ interface MappedPoint {
 }
 
 interface ScatterFixture {
-  chart: G2.Chart;
+  chart: ECharts;
   component: ScatterChartVisualizationComponent;
   container: HTMLDivElement;
   points: () => MappedPoint[];
   radii: () => number[];
   selectSize: (name?: string) => void;
+  config: GraphConfig;
+  resize: (width: number) => void;
+  disconnect: () => void;
+  tooltips: () => unknown[];
 }
 
 const createChart = (): ScatterFixture => {
-  // G2 measures SVG labels on a canvas; jsdom does not implement text measurement.
+  // ECharts measures SVG labels on a canvas; jsdom does not implement text measurement.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     save: vi.fn(),
     restore: vi.fn(),
     measureText: (text: string) => ({ width: text.length * 7 })
   } as unknown as CanvasRenderingContext2D);
 
+  let resizeCallback = () => {};
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        resizeCallback = callback;
+      }
+      observe = vi.fn();
+      disconnect = disconnect;
+    }
+  );
   const field = (name: string, index: number) => ({ name, index, aggr: 'sum' });
   const config = new GraphConfig();
   config.mode = 'scatterChart';
@@ -57,9 +73,12 @@ const createChart = (): ScatterFixture => {
     { x: '3', y: '10', size: '20', other: '2', group: 'A' }
   ];
 
+  const transformation = new PivotTransformation(config);
+  transformation.setTableData(table);
   const visualization = {
     getConfig: () => config,
-    transformed: new PivotTransformation(config).transform(table)
+    getTransformation: () => transformation,
+    transformed: transformation.transform(table)
   } as Visualization;
 
   const component = new ScatterChartVisualizationComponent(visualization, {
@@ -71,51 +90,71 @@ const createChart = (): ScatterFixture => {
   document.body.appendChild(container);
   component.container = new ElementRef(container);
 
-  const chart = new G2.Chart({ container, width: 600, height: 400, renderer: 'svg', animate: false });
-  component.chart = chart;
-  const points = (): MappedPoint[] => {
-    const dataArray = chart.get('geoms')[0].get('dataArray');
-    if (!dataArray) {
-      throw new Error('Expected rendered scatter data');
-    }
-    return dataArray
-      .flat()
-      .map(point => {
-        const { x, y, color, size } = point;
-        if (
-          typeof x !== 'number' ||
-          typeof y !== 'number' ||
-          typeof color !== 'string' ||
-          (size !== undefined && typeof size !== 'number')
-        ) {
-          throw new Error('Expected a mapped scatter point with scalar positions, color and optional size');
-        }
-        return { x, y, color, size };
-      })
-      .sort((a: MappedPoint, b: MappedPoint) => a.x - b.x);
+  let width = 600;
+  Object.defineProperty(container, 'clientWidth', { get: () => width });
+  component.render();
+  const chart = component.chart!;
+  // ECharts' runtime model/geometry APIs are not exposed by its public instance type.
+  const runtimeChart = chart as unknown as {
+    getModel(): {
+      getSeries(): Array<{
+        getData(): {
+          count(): number;
+          getItemLayout(index: number): [number, number];
+          getItemVisual(index: number, key: 'style'): { fill: string };
+          getItemGraphicEl(index: number): { getBoundingRect(): { width: number } };
+        };
+        formatTooltip(index: number, multipleSeries: boolean): unknown;
+      }>;
+    };
   };
-  const radii = (): number[] => {
-    const shapeContainer = chart.get('geoms')[0].get('shapeContainer');
-    if (!shapeContainer) {
-      throw new Error('Expected a rendered scatter shape container');
-    }
-    return shapeContainer
-      .get('children')
-      .map(shape => {
-        const radius = shape.attr('radius');
-        if (typeof radius !== 'number') {
-          throw new Error('Expected a rendered scatter marker with a numeric radius');
-        }
-        return radius;
+  const points = (): MappedPoint[] =>
+    runtimeChart
+      .getModel()
+      .getSeries()
+      .flatMap(series => {
+        const data = series.getData();
+        return Array.from({ length: data.count() }, (_, index) => {
+          const [x, y] = data.getItemLayout(index);
+          return {
+            x,
+            y,
+            color: data.getItemVisual(index, 'style').fill,
+            size: data.getItemGraphicEl(index).getBoundingRect().width / 2
+          };
+        });
       })
-      .sort((a: number, b: number) => a - b);
-  };
+      .sort((a, b) => a.x - b.x);
+  const radii = () =>
+    points()
+      .map(point => point.size!)
+      .sort((a, b) => a - b);
 
   const selectSize = (name?: string) => {
     config.setting.scatterChart!.size = name ? field(name, table.columns.indexOf(name)) : undefined;
     component.render();
   };
-  return { chart, component, container, points, radii, selectSize };
+  return {
+    chart,
+    component,
+    container,
+    points,
+    radii,
+    selectSize,
+    config,
+    resize: (nextWidth: number) => {
+      width = nextWidth;
+      resizeCallback();
+    },
+    disconnect,
+    tooltips: () =>
+      runtimeChart
+        .getModel()
+        .getSeries()
+        .flatMap(series =>
+          Array.from({ length: series.getData().count() }, (_, index) => series.formatTooltip(index, false))
+        )
+  };
 };
 
 describe('ScatterChartVisualizationComponent point sizes', () => {
@@ -125,6 +164,7 @@ describe('ScatterChartVisualizationComponent point sizes', () => {
     fixture?.component.ngOnDestroy();
     fixture?.container.remove();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('uses the selected size values independently of Y while preserving positions and groups', () => {
@@ -159,29 +199,63 @@ describe('ScatterChartVisualizationComponent point sizes', () => {
   it('keeps Y values in tooltips and preserves the group legend across size selections', () => {
     fixture = createChart();
     fixture.selectSize();
-    const tooltipContent = () =>
-      fixture
-        .points()
-        .map(point =>
-          fixture.chart
-            .getTooltipItems(point)
-            .map((item: { name: string; value: string }) => ({ name: item.name, value: item.value }))
-        );
-    const legendItems = () => {
-      const legends = fixture.chart.get('legendController').legends;
-      return Object.values(legends)
-        .flat()
-        .map(legend => legend.get('items'));
-    };
+    const tooltipContent = () => fixture.tooltips();
+    const legendItems = () => fixture.chart.getOption().legend;
     const tooltips = tooltipContent();
     const legends = legendItems();
-    expect(tooltips.flat()).toContainEqual({ name: 'y.A', value: '10' });
+    expect(tooltips).toContainEqual(
+      expect.objectContaining({
+        header: 'y.A',
+        blocks: expect.arrayContaining([expect.objectContaining({ value: 10 })])
+      })
+    );
     expect(legends).toHaveLength(1);
+    expect(fixture.container.querySelector('svg path')).not.toBeNull();
 
     for (const size of ['size', 'other', undefined]) {
       fixture.selectSize(size);
       expect(tooltipContent()).toEqual(tooltips);
       expect(legendItems()).toEqual(legends);
     }
+  });
+
+  it('resizes the live SVG without replacing data and disposes once on destruction', () => {
+    fixture = createChart();
+    const chart = fixture.chart;
+    const option = chart.getOption().series;
+    const setOption = vi.spyOn(chart, 'setOption');
+    const dispose = vi.spyOn(chart, 'dispose');
+    fixture.config.height = 520;
+    fixture.resize(780);
+    expect(chart.getWidth()).toBe(780);
+    expect(chart.getHeight()).toBe(520);
+    expect(chart.getOption().series).toEqual(option);
+    expect(setOption).not.toHaveBeenCalled();
+    expect(fixture.container.querySelector('svg')?.getAttribute('width')).toBe('780');
+    fixture.component.ngOnDestroy();
+    expect(fixture.disconnect).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(chart.isDisposed()).toBe(true);
+    fixture.resize(900);
+    fixture.component.render();
+    fixture.component.ngOnDestroy();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(fixture.container.querySelector('svg')).toBeNull();
+  });
+
+  it('resets line focus on double-click and removes zoom when focus is disabled', () => {
+    fixture = createChart();
+    fixture.config.mode = 'lineChart';
+    fixture.config.setting.lineChart = new VisualizationLineChart();
+    fixture.config.setting.lineChart.lineWithFocus = true;
+    fixture.component.render();
+    const chart = fixture.chart;
+    chart.dispatchAction({ type: 'dataZoom', start: 25, end: 75 });
+    expect(chart.getOption().dataZoom).toEqual([expect.objectContaining({ start: 25, end: 75 })]);
+    chart.getZr().trigger('dblclick', {});
+    expect(chart.getOption().dataZoom).toEqual([expect.objectContaining({ start: 0, end: 100 })]);
+    fixture.config.setting.lineChart.lineWithFocus = false;
+    fixture.component.render();
+    expect(chart.getOption().dataZoom).toEqual([]);
   });
 });

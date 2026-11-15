@@ -17,7 +17,6 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
 import { MessageService } from '@zeppelin/services';
-import { setTheme } from '@zeppelin/visualizations';
 import { NzMessageService } from 'ng-zorro-antd/message';
 
 @Component({
@@ -69,7 +68,6 @@ export class WorkspaceComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    setTheme();
     this.setUpWebsocketReconnectMessage();
   }
 

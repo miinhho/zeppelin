@@ -14,11 +14,11 @@ import { CdkPortalOutlet } from '@angular/cdk/portal';
 import { ViewContainerRef } from '@angular/core';
 
 import { GraphConfig } from '@zeppelin/sdk';
-import { G2VisualizationBase, VisualizationComponentPortal } from '@zeppelin/visualization';
+import { EChartsVisualizationBase, VisualizationComponentPortal } from '@zeppelin/visualization';
 
 import { BarChartVisualizationComponent } from './bar-chart-visualization.component';
 
-export class BarChartVisualization extends G2VisualizationBase {
+export class BarChartVisualization extends EChartsVisualizationBase {
   componentPortal = new VisualizationComponentPortal<BarChartVisualization, BarChartVisualizationComponent>(
     this,
     BarChartVisualizationComponent,

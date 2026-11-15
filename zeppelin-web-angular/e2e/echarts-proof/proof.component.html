@@ -1,0 +1,124 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements. See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<h1>Shared paragraph ECharts proof</h1>
+<p class="limit" data-testid="proof-limit">
+  Backend-free fixture using the production NotebookParagraphResultComponent, chart settings and PivotTransformation. No
+  backend, interpreter execution or server-side save persistence is verified. Saved configuration is JSON held in this
+  page's memory only; reloading the page clears it.
+</p>
+<p>
+  Use the paragraph's own chart toolbar and Setting controls below. Fixture: duplicate Day/Group rows, North/South
+  groups, Revenue and Cost measures, a missing South day, and independent X, Y and Size columns. The signed fixture
+  includes negative Cost values for stream geometry inspection.
+</p>
+<div class="controls" aria-label="Proof host controls">
+  <label>
+    Fixture data
+    <select data-testid="fixture" [ngModel]="fixture" (ngModelChange)="changeFixture($event)">
+      <option value="positive">Positive measures</option>
+      <option value="signed">Mixed-sign measures</option>
+    </select>
+  </label>
+  <label>
+    Container width (px)
+    <input data-testid="width" type="number" min="480" max="1600" step="40" [(ngModel)]="width" />
+  </label>
+  <label>
+    Graph height (px)
+    <input
+      data-testid="height"
+      type="number"
+      min="160"
+      max="900"
+      step="40"
+      [ngModel]="config.graph.height"
+      (ngModelChange)="changeHeight($event)"
+    />
+  </label>
+  <button type="button" data-testid="toggle-mount" (click)="toggleMounted()">
+    {{ mounted ? 'Unmount paragraph result' : 'Mount paragraph result' }}
+  </button>
+  <button type="button" data-testid="save-config" (click)="saveConfig()">Save config in memory</button>
+  <button type="button" data-testid="restore-config" [disabled]="!savedConfig" (click)="restoreConfig()">
+    Remount saved JSON config
+  </button>
+</div>
+<div class="state" aria-live="polite">
+  <span>
+    Mode:
+    <output data-testid="mode">{{ config.graph.mode }}</output>
+  </span>
+  <span>
+    Mounted:
+    <output data-testid="mounted">{{ mounted }}</output>
+  </span>
+  <span>
+    Mount count:
+    <output data-testid="mount-count">{{ mountCount }}</output>
+  </span>
+  <span>
+    configChange events:
+    <output data-testid="config-event-count">{{ configEvents.length }}</output>
+  </span>
+  <span>
+    sizeChange events:
+    <output data-testid="size-event-count">{{ sizeEvents.length }}</output>
+  </span>
+</div>
+<section
+  class="proof-stage"
+  data-testid="paragraph-host"
+  aria-label="Production paragraph result"
+  [style.width.px]="width"
+>
+  @if (mounted) {
+    <zeppelin-notebook-paragraph-result
+      id="echarts-proof-result"
+      [id]="'echarts-proof-paragraph'"
+      [result]="result"
+      [config]="config"
+      [published]="false"
+      [isPending]="false"
+      [currentCol]="12"
+      (configChange)="captureConfig($event)"
+      (sizeChange)="captureSize($event)"
+    ></zeppelin-notebook-paragraph-result>
+  }
+</section>
+<section class="evidence" aria-label="Proof evidence">
+  <details>
+    <summary>Raw TABLE fixture</summary>
+    <pre data-testid="raw-table">{{ result.data }}</pre>
+  </details>
+  <details open>
+    <summary>Current paragraph config</summary>
+    <pre data-testid="current-config">{{ currentConfig }}</pre>
+  </details>
+  <details>
+    <summary>Captured configChange snapshots</summary>
+    <pre data-testid="config-events">{{ configEventLog }}</pre>
+  </details>
+  <details>
+    <summary>Captured sizeChange events</summary>
+    <pre data-testid="size-events">{{ sizeEventLog }}</pre>
+  </details>
+  <details>
+    <summary>Saved JSON config (memory only)</summary>
+    <pre data-testid="saved-config">{{ savedConfig }}</pre>
+  </details>
+</section>
